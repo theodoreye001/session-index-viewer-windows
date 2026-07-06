@@ -5,19 +5,22 @@ const RELATIVE_FORMATTER = new Intl.RelativeTimeFormat("en", {
   numeric: "auto",
 });
 
+// en-GB gives 24h DMY ("12 Jun 2026, 19:19") regardless of the
+// viewer's system locale. Hoisted to module scope so the formatter
+// is built once, not on every call.
+const TIMESTAMP_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  year: "numeric",
+  month: "short",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 export function formatTimestamp(value: string): string {
   if (!value) return "Unknown time";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  // en-GB gives 24h DMY ("12 Jun 2026, 19:19") regardless of the
-  // viewer's system locale.
-  return new Intl.DateTimeFormat("en-GB", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  return TIMESTAMP_FORMATTER.format(date);
 }
 
 export function formatRelative(value: string): string {

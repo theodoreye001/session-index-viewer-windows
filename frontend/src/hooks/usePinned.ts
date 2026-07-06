@@ -4,6 +4,12 @@ import type { Session } from "../types";
 
 const STORAGE_KEY = "pinnedSessions";
 
+// Persist the pin set to localStorage. Module-scope so the function
+// identity stays stable and memoized children don't re-render.
+function savePinned(next: Set<string>) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
+}
+
 // Pinned session ids persist in localStorage so starred sessions
 // survive reloads. The pin set is stored as a JSON array.
 export function usePinned() {
@@ -11,17 +17,13 @@ export function usePinned() {
     () => new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]")),
   );
 
-  const save = (next: Set<string>) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
-  };
-
   const toggle = useCallback((session: Session) => {
     const key = sessionKey(session);
     setPinnedIds((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
-      save(next);
+      savePinned(next);
       return next;
     });
   }, []);

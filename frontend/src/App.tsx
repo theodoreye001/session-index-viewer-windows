@@ -8,20 +8,31 @@ import { Toolbar } from "./components/Toolbar";
 import { SessionCard } from "./components/SessionCard";
 import { CommandPalette } from "./components/CommandPalette";
 
+interface FilterState {
+  query: string;
+  source: SourceFilter;
+  host: string;
+}
+
+const INITIAL_FILTER: FilterState = {
+  query: "",
+  source: "all",
+  host: "all",
+};
+
 export default function App() {
   const { sessions, error, loading, reload } = useSessions();
   const { pinnedIds, toggle: togglePin, has: isPinned } = usePinned();
 
-  const [query, setQuery] = useState("");
-  const [source, setSource] = useState<SourceFilter>("all");
-  const [host, setHost] = useState("all");
+  const [filter, setFilter] = useState<FilterState>(INITIAL_FILTER);
   const [activeIdx, setActiveIdx] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const { query, source, host } = filter;
 
   const boardRef = useRef<HTMLDivElement>(null);
 
   const hosts = useMemo(
-    () => [...new Set(sessions.map((s) => s.host))].sort(),
+    () => Array.from(new Set(sessions.map((s) => s.host))).toSorted(),
     [sessions],
   );
 
@@ -56,12 +67,10 @@ export default function App() {
       });
   }, [sessions, query, source, host, pinnedIds]);
 
-  // Keep activeIdx in bounds after filter/sort changes.
-  useEffect(() => {
-    if (activeIdx >= filtered.length) {
-      setActiveIdx(Math.max(0, filtered.length - 1));
-    }
-  }, [filtered.length, activeIdx]);
+  // Clamp activeIdx inline so we never render a stale out-of-bounds
+  // selection (deriving during render avoids an extra effect commit).
+  const safeActiveIdx =
+    filtered.length === 0 ? 0 : Math.min(activeIdx, filtered.length - 1);
 
   const scrollActiveIntoView = useCallback(() => {
     const card = boardRef.current?.querySelector(".card.is-active");
@@ -100,28 +109,26 @@ export default function App() {
         });
       } else if (e.key === "Enter") {
         e.preventDefault();
-        const item = filtered[activeIdx];
+        const item = filtered[safeActiveIdx];
         if (item) void postResume(item);
       } else if (e.key === "c") {
         e.preventDefault();
-        const item = filtered[activeIdx];
+        const item = filtered[safeActiveIdx];
         if (item) void navigator.clipboard.writeText(item.resume_command);
       } else if (e.key === "p") {
         e.preventDefault();
-        const item = filtered[activeIdx];
+        const item = filtered[safeActiveIdx];
         if (item) togglePin(item);
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [filtered, activeIdx, paletteOpen, togglePin, scrollActiveIntoView]);
+  }, [filtered, safeActiveIdx, paletteOpen, togglePin, scrollActiveIntoView]);
 
   const jumpToSession = useCallback(
     (item: Session) => {
       setPaletteOpen(false);
-      setQuery("");
-      setSource("all");
-      setHost("all");
+      setFilter(INITIAL_FILTER);
       // Defer the index lookup until after the filter clears.
       requestAnimationFrame(() => {
         const idx = filtered.findIndex(
@@ -150,11 +157,13 @@ export default function App() {
         </h1>
         <Toolbar
           query={query}
-          onQueryChange={setQuery}
+          onQueryChange={(v) => setFilter((f) => ({ ...f, query: v }))}
           source={source}
-          onSourceChange={setSource}
+          onSourceChange={(v) =>
+            setFilter((f) => ({ ...f, source: v }))
+          }
           host={host}
-          onHostChange={setHost}
+          onHostChange={(v) => setFilter((f) => ({ ...f, host: v }))}
           hosts={hosts}
           onRefresh={reload}
         />
@@ -179,7 +188,7 @@ export default function App() {
               key={sessionKey(item)}
               session={item}
               index={idx}
-              active={idx === activeIdx}
+              active={idx === safeActiveIdx}
               pinned={isPinned(item)}
               queryText={queryText}
               onPin={() => togglePin(item)}

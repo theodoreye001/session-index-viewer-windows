@@ -164,6 +164,24 @@
         box-shadow: 0 14px 40px rgba(62, 47, 33, 0.08);
       }
 
+      /* Stretched activation button covers the whole card so a click
+         anywhere selects it. Inner interactive controls are raised
+         above it so they stay clickable. */
+      .card-activate {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        border: 0;
+        padding: 0;
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .card button:not(.card-activate) {
+        position: relative;
+        z-index: 2;
+      }
+
       .card-side {
         display: grid;
         align-content: start;
@@ -633,29 +651,26 @@
         outline-offset: 2px;
       }
 
-      /* Command palette modal (Cmd+K). Lightweight overlay; the input
-         and results list are rendered into .palette-body. */
-      .palette-overlay {
-        position: fixed;
-        inset: 0;
-        z-index: 100;
-        background: rgba(31, 26, 23, 0.35);
-        display: flex;
-        align-items: flex-start;
-        justify-content: center;
-        padding-top: 12vh;
-      }
-
-      .palette {
+      /* Command palette modal (Cmd+K). Uses the native <dialog> element
+         so we get focus trapping, Escape-to-close, and the backdrop for
+         free. */
+      dialog.palette {
         width: min(640px, 92vw);
         max-height: 70vh;
-        display: flex;
-        flex-direction: column;
-        background: var(--panel-strong, #fffaf2);
+        margin-top: 12vh;
+        padding: 0;
         border: 1px solid var(--line);
         border-radius: 16px;
+        background: var(--panel-strong, #fffaf2);
         box-shadow: 0 24px 60px rgba(31, 26, 23, 0.28);
+        display: flex;
+        flex-direction: column;
         overflow: hidden;
+        color: var(--text);
+      }
+
+      dialog.palette::backdrop {
+        background: rgba(31, 26, 23, 0.35);
       }
 
       .palette-input {
@@ -680,8 +695,14 @@
         grid-template-columns: auto 1fr auto;
         gap: 12px;
         align-items: center;
+        width: 100%;
         padding: 10px 14px;
+        border: 0;
         border-radius: 10px;
+        background: transparent;
+        text-align: left;
+        font: inherit;
+        color: inherit;
         cursor: pointer;
       }
 

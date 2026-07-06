@@ -17,8 +17,11 @@ export function CommandPalette({
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
+  // prevQuery is only consulted to detect changes, never rendered, so a
+  // ref avoids the pointless re-render a useState would trigger.
+  const prevQueryRef = useRef(query);
   const inputRef = useRef<HTMLInputElement>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -40,13 +43,31 @@ export function CommandPalette({
       .slice(0, 50);
   }, [sessions, query]);
 
-  useEffect(() => {
+  // Reset the selection when the query changes, adjusted inline during
+  // render (prev-value comparison) so there is no stale-frame effect.
+  if (query !== prevQueryRef.current) {
+    prevQueryRef.current = query;
     setActiveIdx(0);
-  }, [query]);
+  }
 
+  // Open the native dialog on mount; native <dialog> gives us focus
+  // trapping, Escape-to-close, and the backdrop for free. The backdrop
+  // click-to-close is wired via addEventListener so the dialog element
+  // itself stays free of JSX interaction attributes.
   useEffect(() => {
+    const dlg = dialogRef.current;
+    if (!dlg) return;
+    if (!dlg.open) dlg.showModal();
     inputRef.current?.focus();
-  }, []);
+    const onBackdropClick = (e: MouseEvent) => {
+      if (e.target === dlg) onClose();
+    };
+    dlg.addEventListener("click", onBackdropClick);
+    return () => {
+      dlg.removeEventListener("click", onBackdropClick);
+      if (dlg.open) dlg.close();
+    };
+  }, [onClose]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
@@ -66,70 +87,68 @@ export function CommandPalette({
   };
 
   return (
-    <div
-      className="palette-overlay"
-      ref={overlayRef}
-      onClick={(e) => {
-        if (e.target === overlayRef.current) onClose();
-      }}
+    <dialog
+      ref={dialogRef}
+      className="palette"
+      aria-label="Jump to session"
     >
-      <div className="palette" role="dialog" aria-label="Jump to session">
-        <input
-          ref={inputRef}
-          className="palette-input"
-          type="text"
-          placeholder="Jump to session by title, id, or cwd…"
-          autoComplete="off"
-          spellCheck={false}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-        <div className="palette-results">
-          {results.length === 0 ? (
-            <div className="palette-empty">No matching sessions.</div>
-          ) : (
-            results.map((item, idx) => {
-              const title =
-                item.title ||
-                (item.first_user
-                  ? item.first_user.slice(0, 60)
-                  : item.session_id);
-              return (
-                <div
-                  key={`${item.source}|${item.session_id}`}
-                  className={`palette-item ${idx === activeIdx ? "is-active" : ""}`}
-                  data-idx={idx}
-                  onClick={() => onJump(item)}
+      <input
+        ref={inputRef}
+        className="palette-input"
+        type="text"
+        placeholder="Jump to session by title, id, or cwd…"
+        aria-label="Search sessions to jump to"
+        autoComplete="off"
+        spellCheck={false}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={handleKeyDown}
+      />
+      <div className="palette-results">
+        {results.length === 0 ? (
+          <div className="palette-empty">No matching sessions.</div>
+        ) : (
+          results.map((item, idx) => {
+            const title =
+              item.title ||
+              (item.first_user
+                ? item.first_user.slice(0, 60)
+                : item.session_id);
+            return (
+              <button
+                type="button"
+                key={`${item.source}|${item.session_id}`}
+                className={`palette-item ${idx === activeIdx ? "is-active" : ""}`}
+                data-idx={idx}
+                onClick={() => onJump(item)}
+              >
+                <span
+                  className="palette-item-source"
+                  style={{ color: sourceAccent(item.source) }}
                 >
-                  <span
-                    className="palette-item-source"
-                    style={{ color: sourceAccent(item.source) }}
-                  >
-                    {item.source}
-                  </span>
-                  <span className="palette-item-title">{title}</span>
-                  <span className="palette-item-meta">
-                    {formatRelative(item.timestamp)}
-                  </span>
-                </div>
-              );
-            })
-          )}
-        </div>
-        <div className="palette-hint">
-          <span>
-            <kbd>↑</kbd>
-            <kbd>↓</kbd> navigate
-          </span>
-          <span>
-            <kbd>Enter</kbd> jump
-          </span>
-          <span>
-            <kbd>Esc</kbd> close
-          </span>
-        </div>
+                  {item.source}
+                </span>
+                <span className="palette-item-title">{title}</span>
+                <span className="palette-item-meta">
+                  {formatRelative(item.timestamp)}
+                </span>
+              </button>
+            );
+          })
+        )}
       </div>
-    </div>
+      <div className="palette-hint">
+        <span>
+          <kbd>↑</kbd>
+          <kbd>↓</kbd> navigate
+        </span>
+        <span>
+          <kbd>Enter</kbd> jump
+        </span>
+        <span>
+          <kbd>Esc</kbd> close
+        </span>
+      </div>
+    </dialog>
   );
 }

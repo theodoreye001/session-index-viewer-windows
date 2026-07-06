@@ -23,7 +23,7 @@ export function Toolbar({
 }: ToolbarProps) {
   return (
     <div className="toolbar">
-      <label className="field">
+      <div className="field">
         <svg
           className="field-icon"
           viewBox="0 0 16 16"
@@ -42,13 +42,15 @@ export function Toolbar({
         <input
           type="search"
           placeholder="Search keywords"
+          aria-label="Search sessions by keyword"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
         />
-      </label>
+      </div>
 
-      <label className="field">
+      <div className="field">
         <select
+          aria-label="Filter by source"
           value={source}
           onChange={(e) => onSourceChange(e.target.value as SourceFilter)}
         >
@@ -57,10 +59,14 @@ export function Toolbar({
           <option value="claude">Claude</option>
           <option value="devin">Devin</option>
         </select>
-      </label>
+      </div>
 
-      <label className="field">
-        <select value={host} onChange={(e) => onHostChange(e.target.value)}>
+      <div className="field">
+        <select
+          aria-label="Filter by host"
+          value={host}
+          onChange={(e) => onHostChange(e.target.value)}
+        >
           <option value="all">All Hosts</option>
           {hosts.map((h) => (
             <option key={h} value={h}>
@@ -68,13 +74,13 @@ export function Toolbar({
             </option>
           ))}
         </select>
-      </label>
+      </div>
 
-      <label className="field load-field">
-        <button type="button" onClick={onRefresh}>
+      <div className="field load-field">
+        <button type="button" onClick={onRefresh} aria-label="Refresh sessions">
           Refresh
         </button>
-      </label>
+      </div>
     </div>
   );
 }

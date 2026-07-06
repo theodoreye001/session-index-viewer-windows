@@ -59,12 +59,22 @@ export function SessionCard({
     .join(" ");
 
   return (
-    <article
+    <div
       className={classes}
       style={{ "--accent": accent } as React.CSSProperties}
       data-idx={index}
-      onClick={onActivate}
     >
+      {/* Stretched activation button: a real <button> covering the
+          whole card so clicks anywhere select it, while the inner
+          controls (pin/copy/open) sit above it via z-index. Not a tab
+          stop (tabIndex={-1}) — card navigation stays on j/k. */}
+      <button
+        type="button"
+        className="card-activate"
+        tabIndex={-1}
+        aria-label={`Select session ${session.title || session.session_id}`}
+        onClick={onActivate}
+      />
       <div className="card-side">
         <header className="card-head">
           <span className="pill-group">
@@ -204,6 +214,6 @@ export function SessionCard({
           />
         </div>
       </div>
-    </article>
+    </div>
   );
 }

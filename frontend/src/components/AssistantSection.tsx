@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { renderMarkdown } from "../utils/markdown";
 
 const COLLAPSED_MAX_HEIGHT = 260;
@@ -19,11 +19,21 @@ export function AssistantSection({
   const [needsToggle, setNeedsToggle] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  // Measure overflow via ResizeObserver so the toggle appears whenever
+  // the rendered height changes (content update, font load, etc.).
+  // useLayoutEffect runs synchronously before paint, so the initial
+  // measurement is set without a visible empty-state flash. Empty deps:
+  // the observer reacts to size, not to prop changes.
+  useLayoutEffect(() => {
     const el = bodyRef.current;
     if (!el) return;
-    setNeedsToggle(el.scrollHeight > COLLAPSED_MAX_HEIGHT + 8);
-  }, [lastAssistant]);
+    const update = () =>
+      setNeedsToggle(el.scrollHeight > COLLAPSED_MAX_HEIGHT + 8);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   return (
     <section className="section">
