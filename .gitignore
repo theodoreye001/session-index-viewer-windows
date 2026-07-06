@@ -3,3 +3,10 @@ __pycache__/
 *.pyc
 seed-fake-sessions.py
 .DS_Store
+
+# React frontend build artifacts and deps
+frontend/node_modules/
+frontend/dist/
+
+# Debug screenshots (Chrome DevTools captures)
+card-*.png

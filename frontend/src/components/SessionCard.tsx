@@ -1,0 +1,209 @@
+import type { Session } from "../types";
+import {
+  formatRelative,
+  formatTimestamp,
+  highlight,
+  sourceAccent,
+  sessionKey,
+} from "../utils/format";
+import { postResume } from "../api";
+import { MetaRow } from "./MetaRow";
+import { UsageRow } from "./UsageRow";
+import { AssistantSection } from "./AssistantSection";
+
+interface SessionCardProps {
+  session: Session;
+  index: number;
+  active: boolean;
+  pinned: boolean;
+  queryText: string;
+  onPin: () => void;
+  onActivate: () => void;
+}
+
+export function SessionCard({
+  session,
+  index,
+  active,
+  pinned,
+  queryText,
+  onPin,
+  onActivate,
+}: SessionCardProps) {
+  const accent = sourceAccent(session.source);
+  const key = sessionKey(session);
+
+  const handleOpen = async () => {
+    try {
+      await postResume(session);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(session.resume_command);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const classes = [
+    "card",
+    pinned ? "is-pinned" : "",
+    active ? "is-active" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <article
+      className={classes}
+      style={{ "--accent": accent } as React.CSSProperties}
+      data-idx={index}
+      onClick={onActivate}
+    >
+      <div className="card-side">
+        <header className="card-head">
+          <span className="pill-group">
+            <span className="source-pill" style={{ color: accent }}>
+              {session.source}
+            </span>
+            <span className="host-pill">{session.host}</span>
+          </span>
+          <button
+            className={`pin-button ${pinned ? "is-pinned" : ""}`}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPin();
+            }}
+            title={pinned ? "Unpin" : "Pin to top"}
+            aria-label={pinned ? "Unpin session" : "Pin session to top"}
+          >
+            {pinned ? "★" : "☆"}
+          </button>
+        </header>
+
+        <div className="meta">
+          <MetaRow label="timestamp" tooltip={formatTimestamp(session.timestamp)}>
+            <div className="meta-value">
+              {formatRelative(session.timestamp)}
+            </div>
+          </MetaRow>
+          <MetaRow label="cwd" tooltip={session.cwd}>
+            <div className="meta-value">{session.cwd}</div>
+          </MetaRow>
+          <MetaRow label="session id" tooltip={session.session_id}>
+            <div className="meta-value">{session.session_id}</div>
+          </MetaRow>
+          {session.usage && <UsageRow usage={session.usage} />}
+          <MetaRow label="command" tooltip={session.resume_command}>
+            <div className="command-frame">
+              <div className="meta-value">{session.resume_command}</div>
+              <button
+                className="meta-icon"
+                type="button"
+                onClick={handleCopy}
+                title="Copy command"
+                aria-label="Copy command"
+              >
+                ⧉
+              </button>
+            </div>
+          </MetaRow>
+        </div>
+
+        <div className="resume-actions">
+          <button
+            className="toggle-button"
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpen();
+            }}
+          >
+            <svg
+              viewBox="0 0 16 16"
+              width="13"
+              height="13"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4.5 5l3 3-3 3" />
+              <line x1="8.5" y1="11.5" x2="12" y2="11.5" />
+            </svg>
+            Open in Terminal
+          </button>
+        </div>
+      </div>
+
+      <div className="card-main">
+        {session.title && (
+          <h3
+            className="card-title"
+            dangerouslySetInnerHTML={{
+              __html: highlight(session.title, queryText),
+            }}
+          />
+        )}
+        <div className="sections">
+          <section className="section">
+            <div className="section-title">
+              <svg
+                viewBox="0 0 12 12"
+                width="10"
+                height="10"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M3 2L10 6L3 10Z" />
+              </svg>
+              Opening prompt
+            </div>
+            <p
+              className="section-body"
+              dangerouslySetInnerHTML={{
+                __html: highlight(session.first_user || " ", queryText),
+              }}
+            />
+          </section>
+          <section className="section">
+            <div className="section-title">
+              <svg
+                viewBox="0 0 12 12"
+                width="10"
+                height="10"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M2.5 4.5l3.5 3.5 3.5-3.5" />
+              </svg>
+              Last prompt
+            </div>
+            <p
+              className="section-body"
+              dangerouslySetInnerHTML={{
+                __html: highlight(session.last_user || " ", queryText),
+              }}
+            />
+          </section>
+          <AssistantSection
+            sessionKey={key}
+            lastAssistant={session.last_assistant}
+          />
+        </div>
+      </div>
+    </article>
+  );
+}

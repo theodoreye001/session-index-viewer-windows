@@ -11,6 +11,7 @@ exposed beyond this machine.
 
 import glob
 import json
+import mimetypes
 import os
 import re
 import shlex
@@ -25,8 +26,16 @@ PORT = 7333
 BIND = "127.0.0.1"
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-HTML_PATH = os.path.join(ROOT, "sessions-index.html")
 FAVICON_PATH = os.path.join(ROOT, "favicon.svg")
+
+# Production: serve the built React bundle from frontend/dist/. Dev
+# mode uses Vite's dev server (:5173) with a proxy to :7333, so this
+# path only matters when running server.py standalone.
+DIST_PATH = os.path.join(ROOT, "frontend", "dist")
+INDEX_HTML = os.path.join(DIST_PATH, "index.html")
+# Fall back to the legacy single-file viewer if the bundle hasn't
+# been built yet.
+LEGACY_HTML = os.path.join(ROOT, "sessions-index.html")
 
 CLAUDE_GLOB = os.path.expanduser("~/.claude/projects/*/*.jsonl")
 CODEX_GLOB = os.path.expanduser("~/.codex/sessions/*/*/*/rollout-*.jsonl")
@@ -319,13 +328,56 @@ def devin_sessions(limit):
     try:
         conn = sqlite3.connect(f"file:{DEVIN_DB}?mode=ro", uri=True)
         sessions = conn.execute(
-            "SELECT id, working_directory, title, last_activity_at "
+            "SELECT id, working_directory, title, last_activity_at, "
+            "model, created_at "
             "FROM sessions WHERE hidden = 0 "
             "ORDER BY last_activity_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
 
-        for sid, cwd, title, last_activity_at in sessions:
+        # Aggregate token / tool / turn usage per session in one query so
+        # we don't add N+1 round-trips. Matches the metrics fields Devin
+        # CLI writes on every assistant message (see /session-stats).
+        # peak_context_tokens = max(input_tokens) over assistant turns,
+        # i.e. the largest context window this session ever occupied.
+        usage_by_sid = {}
+        if sessions:
+            placeholders = ",".join("?" for _ in sessions)
+            rows = conn.execute(
+                "SELECT session_id, "
+                "  SUM(CASE WHEN json_extract(chat_message,'$.metadata.metrics.input_tokens') IS NOT NULL "
+                "    THEN json_extract(chat_message,'$.metadata.metrics.input_tokens') ELSE 0 END), "
+                "  SUM(CASE WHEN json_extract(chat_message,'$.metadata.metrics.output_tokens') IS NOT NULL "
+                "    THEN json_extract(chat_message,'$.metadata.metrics.output_tokens') ELSE 0 END), "
+                "  SUM(CASE WHEN json_extract(chat_message,'$.metadata.metrics.cache_read_tokens') IS NOT NULL "
+                "    THEN json_extract(chat_message,'$.metadata.metrics.cache_read_tokens') ELSE 0 END), "
+                "  SUM(CASE WHEN json_extract(chat_message,'$.metadata.metrics.cache_creation_tokens') IS NOT NULL "
+                "    THEN json_extract(chat_message,'$.metadata.metrics.cache_creation_tokens') ELSE 0 END), "
+                "  SUM(CASE WHEN json_extract(chat_message,'$.tool_calls') IS NOT NULL "
+                "    THEN json_array_length(json_extract(chat_message,'$.tool_calls')) ELSE 0 END), "
+                "  SUM(CASE WHEN json_extract(chat_message,'$.role')='user' "
+                "    AND json_extract(chat_message,'$.metadata.is_user_input')=1 THEN 1 ELSE 0 END), "
+                "  COUNT(*), "
+                "  MAX(CASE WHEN json_extract(chat_message,'$.role')='assistant' "
+                "    AND json_extract(chat_message,'$.metadata.metrics.input_tokens') IS NOT NULL "
+                "    THEN json_extract(chat_message,'$.metadata.metrics.input_tokens') END) "
+                f"FROM message_nodes WHERE session_id IN ({placeholders}) "
+                "GROUP BY session_id",
+                [s[0] for s in sessions],
+            ).fetchall()
+            for sid, inp, out, cr, cc, tools, turns, msgs, peak in rows:
+                usage_by_sid[sid] = {
+                    "input_tokens": inp or 0,
+                    "output_tokens": out or 0,
+                    "cache_read_tokens": cr or 0,
+                    "cache_creation_tokens": cc or 0,
+                    "tool_calls": tools or 0,
+                    "user_turns": turns or 0,
+                    "messages": msgs or 0,
+                    "peak_context_tokens": peak or 0,
+                }
+
+        for sid, cwd, title, last_activity_at, model, created_at in sessions:
             cache_key = f"devin:{sid}"
             hit = _cache.get(cache_key)
             if hit and hit[0] == last_activity_at:
@@ -378,6 +430,13 @@ def devin_sessions(limit):
             if not last_assistant:
                 continue  # skip sessions with no agent output yet
 
+            usage = usage_by_sid.get(sid, {})
+            # Wall-clock duration between first and last activity. Sessions
+            # span idle time too, so this is an upper bound on active work.
+            duration_s = max(0, (last_activity_at or 0) - (created_at or 0))
+            usage["duration_s"] = duration_s
+            usage["model"] = model or ""
+
             entry = {
                 "source": "devin",
                 "sort_ts": datetime.fromtimestamp(
@@ -389,6 +448,7 @@ def devin_sessions(limit):
                 "first_user": clip(clean_inline(first_user)),
                 "last_user": clip(clean_inline(last_user)),
                 "last_assistant": clean_multiline(last_assistant),
+                "usage": usage,
             }
             _cache[cache_key] = (last_activity_at, entry)
             entries.append(entry)
@@ -490,6 +550,7 @@ def scan_sessions(limit):
             "last_user": e["last_user"],
             "last_assistant": e["last_assistant"],
             "resume_command": resume_command(e["source"], e["session_id"], e["cwd"]),
+            "usage": e.get("usage"),
         }
         for e in items
     ]
@@ -564,44 +625,52 @@ class Handler(BaseHTTPRequestHandler):
             f"http://127.0.0.1:{PORT}",
         )
 
+    def _serve_file(self, path, content_type, cache="no-store"):
+        try:
+            with open(path, "rb") as f:
+                body = f.read()
+        except OSError:
+            self.send_error(404, f"{os.path.basename(path)} not found")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", cache)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/":
-            try:
-                with open(HTML_PATH, "rb") as f:
-                    body = f.read()
-            except OSError:
-                self.send_error(500, "sessions-index.html not found")
-                return
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-        elif parsed.path == "/favicon.svg":
-            try:
-                with open(FAVICON_PATH, "rb") as f:
-                    body = f.read()
-            except OSError:
-                self.send_error(404, "favicon.svg not found")
-                return
-            self.send_response(200)
-            self.send_header("Content-Type", "image/svg+xml")
-            self.send_header("Cache-Control", "public, max-age=3600")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-        elif parsed.path == "/api/sessions":
-            query = parse_qs(parsed.query)
-            try:
-                limit = int(query.get("limit", [DEFAULT_LIMIT])[0])
-            except ValueError:
-                limit = DEFAULT_LIMIT
-            limit = max(1, min(limit, MAX_LIMIT))
-            self._send_json(scan_sessions(limit))
+        path = parsed.path
+        if path == "/":
+            html = INDEX_HTML if os.path.isfile(INDEX_HTML) else LEGACY_HTML
+            self._serve_file(html, "text/html; charset=utf-8")
+        elif path == "/favicon.svg":
+            self._serve_file(
+                FAVICON_PATH, "image/svg+xml", "public, max-age=3600"
+            )
+        elif path.startswith("/api/"):
+            if path == "/api/sessions":
+                query = parse_qs(parsed.query)
+                try:
+                    limit = int(query.get("limit", [DEFAULT_LIMIT])[0])
+                except ValueError:
+                    limit = DEFAULT_LIMIT
+                limit = max(1, min(limit, MAX_LIMIT))
+                self._send_json(scan_sessions(limit))
+            else:
+                self.send_error(404)
         else:
-            self.send_error(404)
+            # Static assets from the Vite build (JS/CSS chunks). Serve
+            # them from dist/ with long cache; anything else falls back
+            # to the SPA index so client-side routing works.
+            asset = os.path.join(DIST_PATH, path.lstrip("/"))
+            if os.path.isfile(asset):
+                guessed = mimetypes.guess_type(asset)[0] or "application/octet-stream"
+                self._serve_file(asset, guessed, "public, max-age=31536000, immutable")
+            else:
+                html = INDEX_HTML if os.path.isfile(INDEX_HTML) else LEGACY_HTML
+                self._serve_file(html, "text/html; charset=utf-8")
 
     def do_POST(self):
         if urlparse(self.path).path != "/api/resume":
