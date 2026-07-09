@@ -27,6 +27,8 @@ export default function App() {
   const [filter, setFilter] = useState<FilterState>(INITIAL_FILTER);
   const [activeIdx, setActiveIdx] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Bumped to ask the active SessionCard to open its usage modal.
+  const [usageOpenRequest, setUsageOpenRequest] = useState(0);
   const { query, source, host } = filter;
 
   const boardRef = useRef<HTMLDivElement>(null);
@@ -77,9 +79,11 @@ export default function App() {
     card?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, []);
 
-  // Keyboard navigation: j/k move, Enter opens, c copies, p pins,
-  // Cmd+K toggles palette. Ignored while typing in inputs or when
-  // the palette is open (palette handles its own keys).
+  // Keyboard navigation: j/k move, Enter opens, c copies resume cmd,
+  // p pins, u opens usage, Cmd+K toggles palette. Ignored while typing
+  // in inputs or when the palette is open. Single-letter shortcuts must
+  // not fire with modifiers — otherwise Cmd/Ctrl+C steals the browser
+  // copy of selected text.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
@@ -92,6 +96,8 @@ export default function App() {
       }
 
       if (paletteOpen) return;
+      // Leave Cmd/Ctrl/Alt combos to the browser (copy, paste, print…).
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
@@ -119,6 +125,10 @@ export default function App() {
         e.preventDefault();
         const item = filtered[safeActiveIdx];
         if (item) togglePin(item);
+      } else if (e.key === "u") {
+        e.preventDefault();
+        const item = filtered[safeActiveIdx];
+        if (item?.usage) setUsageOpenRequest((n) => n + 1);
       }
     };
     document.addEventListener("keydown", handler);
@@ -193,6 +203,9 @@ export default function App() {
               queryText={queryText}
               onPin={() => togglePin(item)}
               onActivate={() => setActiveIdx(idx)}
+              usageOpenRequest={
+                idx === safeActiveIdx ? usageOpenRequest : 0
+              }
             />
           ))}
       </section>

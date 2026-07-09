@@ -19,6 +19,7 @@
         --codex: #0d6b59;
         --claude: #b3532f;
         --devin: #2d6cdf;
+        --grok: #6b4fd8;
         --highlight: #f1c46a;
         --chip: #f0e6d5;
       }
@@ -770,6 +771,7 @@
               <option value="codex">Codex</option>
               <option value="claude">Claude</option>
               <option value="devin">Devin</option>
+              <option value="grok">Grok</option>
             </select>
           </label>
 
@@ -886,13 +888,15 @@
       }
 
       // One-line summary shown in the meta-value cell.
+      // Grok only has context occupancy (mapped into input + peak); skip a
+      // redundant peak suffix when it equals the token total.
       function usageSummary(u) {
         const total = (u.input_tokens || 0) + (u.output_tokens || 0) +
                       (u.cache_read_tokens || 0) + (u.cache_creation_tokens || 0);
-        const peak = u.peak_context_tokens
-          ? ` · peak ${formatTokens(u.peak_context_tokens)}`
-          : "";
-        return `${formatTokens(total)} tokens${peak} · ${u.tool_calls || 0} tools · ${u.user_turns || 0} turns`;
+        const peak = u.peak_context_tokens || 0;
+        const peakPart =
+          peak && peak !== total ? ` · peak ${formatTokens(peak)}` : "";
+        return `${formatTokens(total)} tokens${peakPart} · ${u.tool_calls || 0} tools · ${u.user_turns || 0} turns`;
       }
 
       // Multi-line breakdown shown in the hover tooltip. Real newlines are
@@ -914,7 +918,7 @@
           `cache read: ${formatTokens(cacheRead)}`,
           `cache creation: ${formatTokens(u.cache_creation_tokens || 0)}`,
           `cache hit rate: ${hitRate === null ? "—" : hitRate + "%"}`,
-          `peak context: ${formatTokens(u.peak_context_tokens || 0)}`,
+          `context / peak: ${formatTokens(u.peak_context_tokens || 0)}`,
           `tool calls: ${u.tool_calls || 0}`,
           `user turns: ${u.user_turns || 0}`,
           `messages: ${u.messages || 0}`,
@@ -985,6 +989,7 @@
       function sourceAccent(source) {
         if (source === "claude") return "var(--claude)";
         if (source === "devin") return "var(--devin)";
+        if (source === "grok") return "var(--grok)";
         return "var(--codex)";
       }
 
@@ -1297,11 +1302,14 @@
       });
 
       // Clicking a card (not a button inside it) makes it the active
-      // card for keyboard navigation.
+      // card for keyboard navigation. Skip when the user was selecting
+      // text so copy/hover tooltips keep working without a full re-render.
       board.addEventListener("click", (event) => {
         const card = event.target.closest(".card");
         if (!card) return;
         if (event.target.closest("button")) return;
+        const sel = window.getSelection();
+        if (sel && !sel.isCollapsed && card.contains(sel.anchorNode)) return;
         const idx = Number(card.dataset.idx);
         if (Number.isNaN(idx)) return;
         if (state.activeIdx !== idx) {
@@ -1328,6 +1336,10 @@
         const tag = event.target.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
         if (paletteOpen) return; // palette handles its own keys
+        // Leave Cmd/Ctrl/Alt combos to the browser (e.g. Cmd+C text copy).
+        // Bare "c" is a shortcut that used to also match Cmd+C and call
+        // preventDefault, so selected text could not be copied.
+        if (event.metaKey || event.ctrlKey || event.altKey) return;
 
         if (event.key === "j" || event.key === "ArrowDown") {
           event.preventDefault();

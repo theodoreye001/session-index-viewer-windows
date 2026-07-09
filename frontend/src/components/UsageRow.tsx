@@ -1,14 +1,34 @@
 import type { SessionUsage } from "../types";
-import { usageSummary, usageTooltip } from "../utils/usage";
-import { MetaRow } from "./MetaRow";
+import { usageLine } from "../utils/usage";
 
-// Usage row only renders for Devin sessions (usage !== null). Shows a
-// one-line summary and a multi-line hover tooltip with the full
-// token / cache / duration breakdown.
-export function UsageRow({ usage }: { usage: SessionUsage }) {
+interface UsageRowProps {
+  usage: SessionUsage;
+  source: string;
+  onOpen: () => void;
+}
+
+// Compact one-line usage chip. Primary signal is ctx (+ out when real);
+// full breakdown opens in UsageModal on click.
+export function UsageRow({ usage, source, onOpen }: UsageRowProps) {
+  const line = usageLine(usage, source);
   return (
-    <MetaRow label="usage" tooltip={usageTooltip(usage)} multiline>
-      <div className="meta-value">{usageSummary(usage)}</div>
-    </MetaRow>
+    <div className="meta-row">
+      <div className="meta-label">usage</div>
+      <button
+        type="button"
+        className="usage-chip"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen();
+        }}
+        title="View usage details"
+        aria-label={`Usage: ${line}. Open details.`}
+      >
+        <span className="usage-chip-text">{line}</span>
+        <span className="usage-chip-affordance" aria-hidden="true">
+          ↗
+        </span>
+      </button>
+    </div>
   );
 }

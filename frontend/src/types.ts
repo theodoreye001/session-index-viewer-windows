@@ -1,5 +1,6 @@
 // Session shapes returned by GET /api/sessions. The `usage` field is
-// only present for Devin sessions (aggregated from message_nodes).
+// present when an adapter can derive token/tool metrics (Claude, Codex,
+// Devin, Grok). Field semantics differ by source — see usage utils.
 
 export interface SessionUsage {
   input_tokens: number;
@@ -15,7 +16,7 @@ export interface SessionUsage {
 }
 
 export interface Session {
-  source: "claude" | "codex" | "devin" | string;
+  source: "claude" | "codex" | "devin" | "grok" | string;
   host: string;
   timestamp: string;
   cwd: string;
@@ -28,4 +29,4 @@ export interface Session {
   usage: SessionUsage | null;
 }
 
-export type SourceFilter = "all" | "claude" | "codex" | "devin";
+export type SourceFilter = "all" | "claude" | "codex" | "devin" | "grok";

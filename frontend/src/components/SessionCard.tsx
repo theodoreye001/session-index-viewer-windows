@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { Session } from "../types";
 import {
   formatRelative,
@@ -9,6 +10,7 @@ import {
 import { postResume } from "../api";
 import { MetaRow } from "./MetaRow";
 import { UsageRow } from "./UsageRow";
+import { UsageModal } from "./UsageModal";
 import { AssistantSection } from "./AssistantSection";
 
 interface SessionCardProps {
@@ -19,6 +21,8 @@ interface SessionCardProps {
   queryText: string;
   onPin: () => void;
   onActivate: () => void;
+  /** Parent bumps this to open usage for the active card (keyboard `u`). */
+  usageOpenRequest?: number;
 }
 
 export function SessionCard({
@@ -29,9 +33,17 @@ export function SessionCard({
   queryText,
   onPin,
   onActivate,
+  usageOpenRequest = 0,
 }: SessionCardProps) {
   const accent = sourceAccent(session.source);
   const key = sessionKey(session);
+  const [usageOpen, setUsageOpen] = useState(false);
+
+  useEffect(() => {
+    if (usageOpenRequest > 0 && active && session.usage) {
+      setUsageOpen(true);
+    }
+  }, [usageOpenRequest, active, session.usage]);
 
   const handleOpen = async () => {
     try {
@@ -58,23 +70,29 @@ export function SessionCard({
     .filter(Boolean)
     .join(" ");
 
+  // Activate on plain card clicks only. Skip when the user was selecting
+  // text (so copy/select works) or interacting with nested controls.
+  // Avoid a full-card overlay button — it steals hover (tooltips) and
+  // pointer events (text selection).
+  const handleCardClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("button, a, input, textarea, select, .usage-chip")) {
+      return;
+    }
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed && e.currentTarget.contains(sel.anchorNode)) {
+      return;
+    }
+    onActivate();
+  };
+
   return (
     <div
       className={classes}
       style={{ "--accent": accent } as React.CSSProperties}
       data-idx={index}
+      onClick={handleCardClick}
     >
-      {/* Stretched activation button: a real <button> covering the
-          whole card so clicks anywhere select it, while the inner
-          controls (pin/copy/open) sit above it via z-index. Not a tab
-          stop (tabIndex={-1}) — card navigation stays on j/k. */}
-      <button
-        type="button"
-        className="card-activate"
-        tabIndex={-1}
-        aria-label={`Select session ${session.title || session.session_id}`}
-        onClick={onActivate}
-      />
       <div className="card-side">
         <header className="card-head">
           <span className="pill-group">
@@ -109,7 +127,13 @@ export function SessionCard({
           <MetaRow label="session id" tooltip={session.session_id}>
             <div className="meta-value">{session.session_id}</div>
           </MetaRow>
-          {session.usage && <UsageRow usage={session.usage} />}
+          {session.usage && (
+            <UsageRow
+              usage={session.usage}
+              source={session.source}
+              onOpen={() => setUsageOpen(true)}
+            />
+          )}
           <MetaRow label="command" tooltip={session.resume_command}>
             <div className="command-frame">
               <div className="meta-value">{session.resume_command}</div>
@@ -214,6 +238,10 @@ export function SessionCard({
           />
         </div>
       </div>
+
+      {usageOpen && session.usage && (
+        <UsageModal session={session} onClose={() => setUsageOpen(false)} />
+      )}
     </div>
   );
 }

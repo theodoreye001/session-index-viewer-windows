@@ -87,6 +87,7 @@ export function highlight(text: string, query: string): string {
 export function sourceAccent(source: string): string {
   if (source === "claude") return "var(--claude)";
   if (source === "devin") return "var(--devin)";
+  if (source === "grok") return "var(--grok)";
   return "var(--codex)";
 }
 
