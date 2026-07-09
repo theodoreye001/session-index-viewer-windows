@@ -2,20 +2,19 @@
 
 [English](README.md) · **简体中文**
 
-本机浏览 Claude Code（`~/.claude/projects`）和 Codex（`~/.codex/sessions`）
-session 的小工具：合并两边的会话历史、按时间排序、可搜索，一键在 Terminal
-新窗口里 resume。
+本机浏览 AI 编程 CLI 会话的小工具。合并 **Claude Code**、**Codex**、**Devin**、
+**Grok** 的近期 session，可搜索，可看 token / 工具用量（有元数据时），一键在
+Terminal 新窗口里 resume。
 
 <p align="center">
-  <img src="docs/screenshot.jpg" alt="Session Index Viewer — 浏览并恢复 Claude Code / Codex 会话" width="900" />
+  <img src="docs/screenshot.jpg" alt="Session Index Viewer — 浏览并恢复 Claude Code / Codex / Devin / Grok 会话" width="900" />
 </p>
 
-`claude --resume` 和 `codex resume` 只列出 session ID 和时间戳——根本看不出
-哪一条是你想要的。这个工具会显示每条 session 的开头提问和最后一次回复，
-让你一眼挑出"就是它"，回到上次断的地方继续。
+各 CLI 的 resume 列表多半只有 session ID 和时间戳，看不出当时在聊什么。本工具
+展示每条 session 的开头提问和最后一次回复，方便挑中目标并接上。
 
 > **仅支持 macOS。** 用 launchd 自启，通过 AppleScript / `open -na` 调用
-> Ghostty、iTerm 或 Terminal.app。按这个顺序自动检测已安装的终端。
+> Ghostty、iTerm 或 Terminal.app。按该顺序自动检测已安装的终端。
 
 ## 运行
 
@@ -24,29 +23,73 @@ session 的小工具：合并两边的会话历史、按时间排序、可搜索
 open http://localhost:7333
 ```
 
-或者前台跑：`python3 server.py`。
+前台运行：`python3 server.py`。
+
+改 UI 后重建前端（可选）：
+
+```bash
+cd frontend && npm install && npm run build
+```
+
+有 `frontend/dist/` 时由 `server.py` 提供该构建；否则回退到
+`sessions-index.html`。
+
+## 支持的来源
+
+| 来源 | 默认路径 | Resume | 用量说明 |
+|------|----------|--------|----------|
+| Claude Code | `~/.claude/projects/*/*.jsonl` | `claude --resume <id>` | 累加 assistant 的 `message.usage`；Context 约为单轮 input+cache 峰值 |
+| Codex | `~/.codex/sessions/**/rollout-*.jsonl` | `codex resume <id>` | 取最后一次累计 `token_count`；Context 约为各轮 total 最大 |
+| Devin | `~/.local/share/devin/cli/sessions.db` | `devin -r <id>` | 从 `message_nodes` 聚合 |
+| Grok | `$GROK_HOME/sessions`（默认 `~/.grok/sessions`） | `grok --resume <id>` | 磁盘上多为 **上下文占用**（`signals.json`）；无头单次（`is_non_interactive`）会跳过 |
+
+卡片上的 usage 是短 chip（`ctx · out · tools · turns`）。点击，或在选中卡片后
+按 **`u`**，打开 modal：Overview KPI、token 分项、Activity、以及该 source
+的计量口径说明。
+
+**Context** 表示峰值 / 窗口占用，不是整场会话的计费 total。Grok 往往只有
+size 信号（chip 上标 **size only**）。
+
+## 键盘
+
+| 键 | 作用 |
+|----|------|
+| `j` / `k` 或方向键 | 移动当前卡片 |
+| `Enter` | 在 Terminal 中 resume |
+| `c` | 复制 resume 命令（不含 ⌘C，系统复制仍可用） |
+| `p` | 置顶 / 取消置顶 |
+| `u` | 打开 usage modal（有用量数据时） |
+| `⌘K` / `Ctrl+K` | 命令面板 |
 
 ## 各部分
 
-- `server.py` — 仅依赖标准库的 HTTP server，绑 `127.0.0.1:7333`。
+- `server.py` — 薄入口（`python3 server.py` / launchd）。
+- `siv/` — 仅标准库的后端，监听 `127.0.0.1:7333`：
   - `GET /` 返回页面。
-  - `GET /api/sessions?limit=100` 实时扫描 session 文件，按 mtime/size
-    缓存，只重新解析变化过的文件。
-  - `POST /api/resume` 打开终端窗口执行
-    `cd <cwd> && claude --resume <id>`（或 `codex resume <id>`）。如果
-    session 记录的是另一台机器上的 home 路径，会先映射到当前机器再打开。
-  - Host 标签从 cwd 的用户名推断：`/Users/<name>/...` 或
-    `/home/<name>/...` 都标成 `<name>`，本机也一样。
-- `sessions-index.html` — 卡片视图，含搜索、source / host 过滤器，每张
-  卡片有 Copy / Open Terminal 两个 resume 入口。
-- `install.sh` — 渲染 launchd plist 并 bootstrap。日志写到
+  - `GET /api/sessions?limit=100` 实时扫描 session，按 mtime/size 缓存。
+  - `POST /api/resume` 校验后打开终端执行
+    `cd <cwd> && <工具> resume <id>`。若 cwd 是另一台机器的 home 前缀，
+    会先映射到本机。
+  - Host 标签取自 cwd 中的用户名（`/Users/<name>/...` 或 `/home/<name>/...`）。
+  - 解析逻辑在 `siv/sources/`（`claude` / `codex` / `devin` / `grok`）。
+- `frontend/` — React 卡片 UI（搜索、source/host 过滤、置顶、usage modal）。
+- `sessions-index.html` — 旧版单文件 UI（无 dist 时回退）。
+- `install.sh` — 写入 launchd plist，并可构建前端。日志：
   `~/Library/Logs/session-index-viewer.log`。
-- `index-sessions.sh` — 早期的 shell 索引脚本，写 `sessions-index.json`，
-  已被 `server.py` 取代。
+- `index-sessions.sh` — 早期 shell 索引，已被 `server.py` 取代。
 
 ## 多机配置
 
-如果你用 syncthing 之类的工具把 `~/.claude/projects` 和 `~/.codex/sessions`
-同步到多台机器，无需任何配置——每条 session 会按 cwd 里的 username 自动
-打标签，toolbar 上的 host 过滤器会自动出现这些选项。如果另一台机器恰好
-用相同 username，那两边会被归到同一个 host。
+用 Syncthing 等同步 session 目录时：
+
+| 路径 | 是否适合同步 |
+|------|----------------|
+| `~/.claude/projects` | 适合（按文件 jsonl） |
+| `~/.codex/sessions` | 适合（按文件 jsonl） |
+| `~/.grok/sessions` | 适合，建议只同步会话目录，并忽略 `session_search.sqlite`、`*.lock` |
+| Devin `sessions.db` | **不适合** — 单库 SQLite 无法多机合并 |
+
+Viewer 无需额外配置：按 session 记录的 cwd 用户名打 host 标签，toolbar
+过滤器会列出这些 host。多台机器若 username 相同，会归到同一 host。
+
+避免两台机器同时写同一个 session id（会产生 conflict 副本）。
