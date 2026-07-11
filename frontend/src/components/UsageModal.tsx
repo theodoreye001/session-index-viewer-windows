@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { Session } from "../types";
 import {
   formatDuration,
@@ -8,6 +8,7 @@ import {
 } from "../utils/format";
 import {
   cacheHitRate,
+  contextSize,
   isContextOnlyUsage,
   lifetimeTotal,
   tokenMixParts,
@@ -18,6 +19,10 @@ import {
 interface UsageModalProps {
   session: Session;
   onClose: () => void;
+  /** Keyboard open: skip enter animation (high-frequency path). */
+  instant?: boolean;
+  /** Element to restore focus to on close (usage chip). */
+  returnFocusTo?: HTMLElement | null;
 }
 
 function TableGroup({
@@ -43,14 +48,32 @@ function TableGroup({
   );
 }
 
-export function UsageModal({ session, onClose }: UsageModalProps) {
+export function UsageModal({
+  session,
+  onClose,
+  instant = false,
+  returnFocusTo = null,
+}: UsageModalProps) {
   const usage = session.usage;
   const titleId = useId();
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [entered, setEntered] = useState(instant);
   const accent = sourceAccent(session.source);
 
   useEffect(() => {
-    closeRef.current?.focus();
+    // Focus the dialog shell so Esc works; restore chip on unmount.
+    dialogRef.current?.focus();
+    let raf = 0;
+    if (!instant) {
+      raf = requestAnimationFrame(() => setEntered(true));
+    }
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      returnFocusTo?.focus?.();
+    };
+  }, [instant, returnFocusTo]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -71,10 +94,9 @@ export function UsageModal({ session, onClose }: UsageModalProps) {
 
   const contextOnly = isContextOnlyUsage(session.source, usage);
   const mix = tokenMixParts(usage, contextOnly);
-  const maxMix = Math.max(...mix.map((p) => p.value), 1);
   const hit = cacheHitRate(usage);
   const total = lifetimeTotal(usage);
-  const ctx = usage.peak_context_tokens || usage.input_tokens || 0;
+  const ctx = contextSize(usage);
 
   const handleCopy = async () => {
     try {
@@ -84,43 +106,34 @@ export function UsageModal({ session, onClose }: UsageModalProps) {
     }
   };
 
-  // 1) Overview first — scannable vitals, no duplicates below.
-  const kpis = [
-    {
-      label: "Context",
-      value: formatTokens(ctx),
-      hint: contextOnly ? "window size" : "peak size",
-    },
-    {
-      label: "Output",
-      value: contextOnly ? "n/a" : formatTokens(usage.output_tokens || 0),
-      hint: contextOnly ? "not recorded" : "lifetime",
-    },
-    {
-      label: "Tools",
-      value: String(usage.tool_calls || 0),
-      hint: "calls",
-    },
-    {
-      label: "Turns",
-      value: String(usage.user_turns || 0),
-      hint: "user",
-    },
-    {
-      label: "Duration",
-      value: formatDuration(usage.duration_s || 0),
-      hint: "wall clock",
-    },
-  ];
-
-  // 2) Tokens group — only token accounting fields (model lives in header).
-  const tokenRows: { label: string; value: string }[] = contextOnly
+  // Overview: no Output cell when size-only; Messages replaces duplicate Activity.
+  const kpis = contextOnly
     ? [
+        { label: "Context", value: formatTokens(ctx) },
+        { label: "Tools", value: String(usage.tool_calls || 0) },
+        { label: "Turns", value: String(usage.user_turns || 0) },
         {
-          label: "Context size",
-          value: formatTokens(ctx),
+          label: "Duration",
+          value: formatDuration(usage.duration_s || 0),
         },
+        { label: "Messages", value: String(usage.messages || 0) },
       ]
+    : [
+        { label: "Context", value: formatTokens(ctx) },
+        {
+          label: "Output",
+          value: formatTokens(usage.output_tokens || 0),
+        },
+        { label: "Tools", value: String(usage.tool_calls || 0) },
+        { label: "Turns", value: String(usage.user_turns || 0) },
+        {
+          label: "Duration",
+          value: formatDuration(usage.duration_s || 0),
+        },
+      ];
+
+  const tokenRows: { label: string; value: string }[] = contextOnly
+    ? []
     : [
         { label: "Input", value: formatTokens(usage.input_tokens || 0) },
         { label: "Output", value: formatTokens(usage.output_tokens || 0) },
@@ -132,10 +145,7 @@ export function UsageModal({ session, onClose }: UsageModalProps) {
           label: "Cache write",
           value: formatTokens(usage.cache_creation_tokens || 0),
         },
-        {
-          label: "Lifetime total",
-          value: formatTokens(total),
-        },
+        { label: "Lifetime total", value: formatTokens(total) },
         {
           label: "Cache hit rate",
           value: hit === null ? "—" : `${hit}%`,
@@ -146,35 +156,46 @@ export function UsageModal({ session, onClose }: UsageModalProps) {
         },
       ];
 
-  // 3) Activity — counts not repeated as primary KPIs only if useful extras.
-  const activityRows: { label: string; value: string }[] = [
-    { label: "Tool calls", value: String(usage.tool_calls || 0) },
-    { label: "User turns", value: String(usage.user_turns || 0) },
-    { label: "Messages", value: String(usage.messages || 0) },
-    {
-      label: "Duration",
-      value: formatDuration(usage.duration_s || 0),
-    },
-  ];
+  // Activity only for extras not already in Overview (messages when full set).
+  const activityRows: { label: string; value: string }[] = contextOnly
+    ? []
+    : [{ label: "Messages", value: String(usage.messages || 0) }];
+
+  const backdropClass = [
+    "usage-modal-backdrop",
+    entered ? "is-entered" : "",
+    instant ? "is-instant" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const panelClass = [
+    "usage-modal",
+    entered ? "is-entered" : "",
+    instant ? "is-instant" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div
-      className="usage-modal-backdrop"
+      className={backdropClass}
       role="presentation"
       onClick={onClose}
     >
       <div
-        className="usage-modal"
+        ref={dialogRef}
+        className={panelClass}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
         style={{ "--accent": accent } as React.CSSProperties}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="usage-modal-head">
           <div className="usage-modal-head-text">
             <div className="usage-modal-eyebrow">Session usage</div>
-            {/* Title + relative time; host/username omitted (same machine is the default). */}
             <h2 id={titleId} className="usage-modal-title">
               <span className="usage-modal-title-text">
                 {session.title || session.session_id}
@@ -183,7 +204,6 @@ export function UsageModal({ session, onClose }: UsageModalProps) {
                 {formatRelative(session.timestamp)}
               </span>
             </h2>
-            {/* Source then model, adjacent — one identity strip. */}
             <div className="usage-modal-meta">
               <span className="source-pill" style={{ color: accent }}>
                 {session.source}
@@ -196,7 +216,6 @@ export function UsageModal({ session, onClose }: UsageModalProps) {
             </div>
           </div>
           <button
-            ref={closeRef}
             type="button"
             className="usage-modal-close"
             onClick={onClose}
@@ -206,61 +225,66 @@ export function UsageModal({ session, onClose }: UsageModalProps) {
           </button>
         </header>
 
-        {/* Overview */}
         <section className="usage-group">
           <div className="usage-section-label">Overview</div>
-          <div className="usage-kpi-grid">
+          <div
+            className={`usage-kpi-grid ${contextOnly ? "usage-kpi-grid--4" : ""}`}
+          >
             {kpis.map((k) => (
               <div key={k.label} className="usage-kpi">
                 <div className="usage-kpi-value">{k.value}</div>
                 <div className="usage-kpi-label">{k.label}</div>
-                <div className="usage-kpi-hint">{k.hint}</div>
               </div>
             ))}
           </div>
         </section>
 
-        {/* Tokens */}
-        <section className="usage-group">
-          <div className="usage-section-label">Tokens</div>
-          {contextOnly && (
+        {contextOnly ? (
+          <section className="usage-group">
             <div className="usage-callout" role="note">
-              <strong>Context size only.</strong> This agent does not store
-              lifetime input/output token totals on disk — only how large the
-              context window was. Numbers below are window size, not cumulative
-              usage.
+              <strong>Context size only</strong>
+              This agent does not store lifetime input/output totals — only how
+              full the context window was ({formatTokens(ctx)} tokens).
             </div>
-          )}
-          {mix.length > 0 && !contextOnly && (
-            <div className="usage-mix-bars">
-              {mix.map((part) => (
-                <div key={part.key} className="usage-mix-row">
-                  <span className="usage-mix-label">{part.label}</span>
-                  <div className="usage-mix-track">
-                    <div
-                      className="usage-mix-fill"
-                      style={{
-                        width: `${Math.max((part.value / maxMix) * 100, 2)}%`,
-                        background: part.color,
-                      }}
-                    />
+          </section>
+        ) : (
+          <section className="usage-group">
+            <div className="usage-section-label">Tokens</div>
+            {mix.length > 0 && (
+              <div className="usage-mix-bars">
+                {mix.map((part) => (
+                  <div key={part.key} className="usage-mix-row">
+                    <span className="usage-mix-label">{part.label}</span>
+                    <div className="usage-mix-track">
+                      <div
+                        className="usage-mix-fill"
+                        style={{
+                          // Share of lifetime total; scaleX keeps GPU-friendly path
+                          transform: `scaleX(${Math.max(part.pct / 100, 0.02)})`,
+                          background: part.color,
+                        }}
+                      />
+                    </div>
+                    <span className="usage-mix-value">
+                      {formatTokens(part.value)}
+                      <span className="usage-mix-pct">
+                        {Math.round(part.pct)}%
+                      </span>
+                    </span>
                   </div>
-                  <span className="usage-mix-value">
-                    {formatTokens(part.value)}
-                  </span>
+                ))}
+              </div>
+            )}
+            <dl className="usage-table">
+              {tokenRows.map((row) => (
+                <div key={row.label} className="usage-table-row">
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
                 </div>
               ))}
-            </div>
-          )}
-          <dl className="usage-table">
-            {tokenRows.map((row) => (
-              <div key={row.label} className="usage-table-row">
-                <dt>{row.label}</dt>
-                <dd>{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
+            </dl>
+          </section>
+        )}
 
         <TableGroup title="Activity" rows={activityRows} />
 
@@ -269,7 +293,11 @@ export function UsageModal({ session, onClose }: UsageModalProps) {
         </p>
 
         <footer className="usage-modal-foot">
-          <button type="button" className="toggle-button" onClick={handleCopy}>
+          <button
+            type="button"
+            className="toggle-button usage-modal-primary"
+            onClick={handleCopy}
+          >
             Copy summary
           </button>
           <button

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Session } from "../types";
 import {
   formatRelative,
@@ -38,12 +38,21 @@ export function SessionCard({
   const accent = sourceAccent(session.source);
   const key = sessionKey(session);
   const [usageOpen, setUsageOpen] = useState(false);
+  // Keyboard `u` skips enter animation; pointer click keeps it.
+  const [usageInstant, setUsageInstant] = useState(false);
+  const usageChipRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (usageOpenRequest > 0 && active && session.usage) {
+      setUsageInstant(true);
       setUsageOpen(true);
     }
   }, [usageOpenRequest, active, session.usage]);
+
+  const openUsageFromPointer = () => {
+    setUsageInstant(false);
+    setUsageOpen(true);
+  };
 
   const handleOpen = async () => {
     try {
@@ -129,9 +138,10 @@ export function SessionCard({
           </MetaRow>
           {session.usage && (
             <UsageRow
+              ref={usageChipRef}
               usage={session.usage}
               source={session.source}
-              onOpen={() => setUsageOpen(true)}
+              onOpen={openUsageFromPointer}
             />
           )}
           <MetaRow label="command" tooltip={session.resume_command}>
@@ -240,7 +250,12 @@ export function SessionCard({
       </div>
 
       {usageOpen && session.usage && (
-        <UsageModal session={session} onClose={() => setUsageOpen(false)} />
+        <UsageModal
+          session={session}
+          instant={usageInstant}
+          returnFocusTo={usageChipRef.current}
+          onClose={() => setUsageOpen(false)}
+        />
       )}
     </div>
   );

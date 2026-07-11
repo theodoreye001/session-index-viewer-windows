@@ -16,7 +16,6 @@ export function cacheHitRate(u: SessionUsage): number | null {
   const cacheRead = u.cache_read_tokens || 0;
   const input = u.input_tokens || 0;
   if (cacheRead + input <= 0) return null;
-  // Grok maps context into input with no real cache split.
   if (cacheRead === 0) return null;
   return Math.round((cacheRead / (cacheRead + input)) * 100);
 }
@@ -33,26 +32,46 @@ export function isContextOnlyUsage(source: string, u: SessionUsage): boolean {
   const peak = u.peak_context_tokens || 0;
   const input = u.input_tokens || 0;
   if (out > 0 || cr > 0 || cc > 0) return false;
-  if (peak > 0 && input > 0 && Math.abs(peak - input) / peak < 0.05) return true;
+  if (peak > 0 && input > 0 && Math.abs(peak - input) / peak < 0.05) {
+    return true;
+  }
   return false;
+}
+
+export function contextSize(u: SessionUsage): number {
+  return u.peak_context_tokens || u.input_tokens || 0;
 }
 
 export interface TokenMixPart {
   key: string;
   label: string;
   value: number;
+  /** 0–100 share of lifetime total (or of context when size-only). */
+  pct: number;
   color: string;
 }
 
-/** Parts for the modal stacked/relative bars. Zeroes omitted. */
-export function tokenMixParts(u: SessionUsage, contextOnly: boolean): TokenMixPart[] {
+/** Parts for modal bars — percentages of lifetime total (not max item). */
+export function tokenMixParts(
+  u: SessionUsage,
+  contextOnly: boolean,
+): TokenMixPart[] {
   if (contextOnly) {
-    const v = u.peak_context_tokens || u.input_tokens || 0;
+    const v = contextSize(u);
     return v > 0
-      ? [{ key: "ctx", label: "context", value: v, color: "var(--usage-ctx)" }]
+      ? [
+          {
+            key: "ctx",
+            label: "context",
+            value: v,
+            pct: 100,
+            color: "var(--usage-ctx)",
+          },
+        ]
       : [];
   }
-  const parts: TokenMixPart[] = [
+  const total = lifetimeTotal(u) || 1;
+  const raw = [
     {
       key: "input",
       label: "input",
@@ -78,60 +97,72 @@ export function tokenMixParts(u: SessionUsage, contextOnly: boolean): TokenMixPa
       color: "var(--usage-cache-write)",
     },
   ];
-  return parts.filter((p) => p.value > 0);
+  return raw
+    .filter((p) => p.value > 0)
+    .map((p) => ({
+      ...p,
+      pct: Math.max((p.value / total) * 100, 0),
+    }));
 }
 
-/**
- * Compact card-line summary with priority truncation:
- *   wide:  257k ctx · 336k out · 81 tools · 50 turns · 1h
- *   mid:   257k ctx · 81 tools · 50 turns
- *   narrow:257k ctx · 50 turns
- *   grok:  186k ctx · context only · 123 tools · 10 turns
- */
-export function usageLine(usage: SessionUsage, source: string): string {
+export interface UsageChipModel {
+  primary: string;
+  secondary: string;
+  sizeOnly: boolean;
+  /** Flat string for aria-label / legacy */
+  line: string;
+}
+
+/** Structured chip copy: bold primary ctx, muted secondary meta. */
+export function usageChipModel(
+  usage: SessionUsage,
+  source: string,
+): UsageChipModel {
   const contextOnly = isContextOnlyUsage(source, usage);
-  const ctx = usage.peak_context_tokens || 0;
+  const ctx = contextSize(usage);
   const out = usage.output_tokens || 0;
   const tools = usage.tool_calls || 0;
   const turns = usage.user_turns || 0;
-  const dur = usage.duration_s || 0;
 
-  const parts: string[] = [];
-  if (ctx > 0) parts.push(`${formatTokens(ctx)} ctx`);
-  else if (contextOnly && (usage.input_tokens || 0) > 0) {
-    parts.push(`${formatTokens(usage.input_tokens)} ctx`);
-  }
+  const primary = ctx > 0 ? `${formatTokens(ctx)} ctx` : "—";
 
-  // Card chip: short flag that full lifetime totals are unavailable.
-  // Modal expands this as "Context size only" with a plain-language note.
-  if (contextOnly) {
-    parts.push("size only");
-  } else if (out > 0) {
-    parts.push(`${formatTokens(out)} out`);
-  }
+  const sec: string[] = [];
+  if (!contextOnly && out > 0) sec.push(`${formatTokens(out)} out`);
+  if (tools > 0) sec.push(`${tools} tools`);
+  if (turns > 0) sec.push(`${turns} turns`);
 
-  if (tools > 0) parts.push(`${tools} tools`);
-  if (turns > 0) parts.push(`${turns} turns`);
-  if (dur > 0) parts.push(formatDuration(dur));
+  const secondary = sec.join(" · ");
+  const line = [primary, contextOnly ? "size only" : "", secondary]
+    .filter(Boolean)
+    .join(" · ");
 
-  if (parts.length === 0) return "—";
-  return parts.join(" · ");
+  return {
+    primary,
+    secondary,
+    sizeOnly: contextOnly,
+    line: line || "—",
+  };
+}
+
+/** @deprecated prefer usageChipModel */
+export function usageLine(usage: SessionUsage, source: string): string {
+  return usageChipModel(usage, source).line;
 }
 
 export function usageSemanticsNote(source: string, contextOnly: boolean): string {
   if (contextOnly || source === "grok") {
-    return "Source note: Grok saves context-window size (how full the prompt was), not a running bill of input/output tokens.";
+    return "Grok records context-window size (how full the prompt was), not a running bill of input/output tokens.";
   }
   if (source === "claude") {
-    return "Source note: Claude sums each assistant turn’s usage. Cache read/write often dominate the lifetime total; Context is peak size for one turn.";
+    return "Claude sums each assistant turn’s usage. Cache read/write often dominate the lifetime total; Context is peak size for one turn.";
   }
   if (source === "codex") {
-    return "Source note: Codex uses the last cumulative token_count. Context is the largest per-turn total seen in the session.";
+    return "Codex uses the last cumulative token_count. Context is the largest per-turn total seen in the session.";
   }
   if (source === "devin") {
-    return "Source note: Devin aggregates metrics from its session database (lifetime sums). Context is peak assistant input tokens.";
+    return "Devin aggregates metrics from its session database (lifetime sums). Context is peak assistant input tokens.";
   }
-  return "Source note: token fields are best-effort from on-disk metadata; adapters differ.";
+  return "Token fields are best-effort from on-disk metadata; adapters differ.";
 }
 
 /** Plain-text block for clipboard / Slack. */
@@ -144,12 +175,12 @@ export function usageCopyText(session: Session): string {
     `source: ${session.source}`,
     `title: ${session.title || "(none)"}`,
     `model: ${u.model || "—"}`,
-    `ctx/peak: ${formatTokens(u.peak_context_tokens || 0)}`,
-    `output: ${formatTokens(u.output_tokens || 0)}`,
+    `context: ${formatTokens(contextSize(u))}`,
+    `output: ${contextOnly ? "n/a" : formatTokens(u.output_tokens || 0)}`,
     `input: ${formatTokens(u.input_tokens || 0)}`,
     `cache read: ${formatTokens(u.cache_read_tokens || 0)}`,
     `cache write: ${formatTokens(u.cache_creation_tokens || 0)}`,
-    `lifetime total: ${contextOnly ? "n/a (context only)" : formatTokens(lifetimeTotal(u))}`,
+    `lifetime total: ${contextOnly ? "n/a (context size only)" : formatTokens(lifetimeTotal(u))}`,
     `cache hit: ${hit === null ? "—" : hit + "%"}`,
     `tools: ${u.tool_calls || 0}`,
     `turns: ${u.user_turns || 0}`,
@@ -161,7 +192,6 @@ export function usageCopyText(session: Session): string {
   return lines.join("\n");
 }
 
-// Kept for any legacy call sites; prefer usageLine for the card.
 export function usageSummary(u: SessionUsage): string {
   return usageLine(u, "");
 }
