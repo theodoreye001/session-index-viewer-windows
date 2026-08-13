@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo } from "react";
 import type { Session } from "../types";
 import {
   formatRelative,
@@ -10,7 +10,6 @@ import {
 import { postResume } from "../api";
 import { MetaRow } from "./MetaRow";
 import { UsageRow } from "./UsageRow";
-import { UsageModal } from "./UsageModal";
 import { AssistantSection } from "./AssistantSection";
 
 interface SessionCardProps {
@@ -19,13 +18,12 @@ interface SessionCardProps {
   active: boolean;
   pinned: boolean;
   queryText: string;
-  onPin: () => void;
-  onActivate: () => void;
-  /** Parent bumps this to open usage for the active card (keyboard `u`). */
-  usageOpenRequest?: number;
+  onPin: (index: number) => void;
+  onActivate: (index: number) => void;
+  onUsageOpen: (session: Session) => void;
 }
 
-export function SessionCard({
+function SessionCardImpl({
   session,
   index,
   active,
@@ -33,26 +31,10 @@ export function SessionCard({
   queryText,
   onPin,
   onActivate,
-  usageOpenRequest = 0,
+  onUsageOpen,
 }: SessionCardProps) {
   const accent = sourceAccent(session.source);
   const key = sessionKey(session);
-  const [usageOpen, setUsageOpen] = useState(false);
-  // Keyboard `u` skips enter animation; pointer click keeps it.
-  const [usageInstant, setUsageInstant] = useState(false);
-  const usageChipRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (usageOpenRequest > 0 && active && session.usage) {
-      setUsageInstant(true);
-      setUsageOpen(true);
-    }
-  }, [usageOpenRequest, active, session.usage]);
-
-  const openUsageFromPointer = () => {
-    setUsageInstant(false);
-    setUsageOpen(true);
-  };
 
   const handleOpen = async () => {
     try {
@@ -92,7 +74,7 @@ export function SessionCard({
     if (sel && !sel.isCollapsed && e.currentTarget.contains(sel.anchorNode)) {
       return;
     }
-    onActivate();
+    onActivate(index);
   };
 
   return (
@@ -115,7 +97,7 @@ export function SessionCard({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onPin();
+              onPin(index);
             }}
             title={pinned ? "Unpin" : "Pin to top"}
             aria-label={pinned ? "Unpin session" : "Pin session to top"}
@@ -138,10 +120,9 @@ export function SessionCard({
           </MetaRow>
           {session.usage && (
             <UsageRow
-              ref={usageChipRef}
               usage={session.usage}
               source={session.source}
-              onOpen={openUsageFromPointer}
+              onOpen={() => onUsageOpen(session)}
             />
           )}
           <MetaRow label="command" tooltip={session.resume_command}>
@@ -248,15 +229,8 @@ export function SessionCard({
           />
         </div>
       </div>
-
-      {usageOpen && session.usage && (
-        <UsageModal
-          session={session}
-          instant={usageInstant}
-          returnFocusTo={usageChipRef.current}
-          onClose={() => setUsageOpen(false)}
-        />
-      )}
     </div>
   );
 }
+
+export const SessionCard = memo(SessionCardImpl);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import type { Session, SourceFilter } from "./types";
 import { useSessions } from "./hooks/useSessions";
 import { usePinned } from "./hooks/usePinned";
@@ -7,6 +8,7 @@ import { postResume } from "./api";
 import { Toolbar } from "./components/Toolbar";
 import { SessionCard } from "./components/SessionCard";
 import { CommandPalette } from "./components/CommandPalette";
+import { UsageModal } from "./components/UsageModal";
 
 interface FilterState {
   query: string;
@@ -27,11 +29,13 @@ export default function App() {
   const [filter, setFilter] = useState<FilterState>(INITIAL_FILTER);
   const [activeIdx, setActiveIdx] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  // Bumped to ask the active SessionCard to open its usage modal.
-  const [usageOpenRequest, setUsageOpenRequest] = useState(0);
+  // Global usage modal — single instance, no per-card state.
+  const [usageSession, setUsageSession] = useState<Session | null>(null);
+  const [showTop, setShowTop] = useState(false);
   const { query, source, host } = filter;
 
   const boardRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
 
   const hosts = useMemo(
     () => Array.from(new Set(sessions.map((s) => s.host))).toSorted(),
@@ -74,9 +78,59 @@ export default function App() {
   const safeActiveIdx =
     filtered.length === 0 ? 0 : Math.min(activeIdx, filtered.length - 1);
 
-  const scrollActiveIntoView = useCallback(() => {
-    const card = boardRef.current?.querySelector(".card.is-active");
-    card?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  // Measure board's offset from the top of the document so the window
+  // virtualizer knows where the list starts (scrollMargin).
+  useEffect(() => {
+    const measure = () => {
+      if (boardRef.current) {
+        setScrollMargin(
+          boardRef.current.getBoundingClientRect().top + window.scrollY,
+        );
+      }
+    };
+    if (!loading) measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [loading]);
+
+  // Show back-to-top button after scrolling past the hero.
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 400);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const virtualizer = useWindowVirtualizer({
+    count: filtered.length,
+    estimateSize: () => 300,
+    overscan: 6,
+    scrollMargin,
+    measureElement: (el) => el.getBoundingClientRect().height,
+  });
+
+  const scrollActiveIntoView = useCallback(
+    (idx: number) => {
+      virtualizer.scrollToIndex(idx, { align: "center" });
+    },
+    [virtualizer],
+  );
+
+  // Stable callbacks for SessionCard memo — pass index, look up item
+  // inside so the callback identity never changes across renders.
+  const handlePin = useCallback(
+    (idx: number) => {
+      const item = filtered[idx];
+      if (item) togglePin(item);
+    },
+    [filtered, togglePin],
+  );
+  const handleActivate = useCallback((idx: number) => {
+    setActiveIdx(idx);
+  }, []);
+
+  // Stable callback for usage chip clicks in SessionCard.
+  const handleUsageOpen = useCallback((session: Session) => {
+    setUsageSession(session);
   }, []);
 
   // Keyboard navigation: j/k move, Enter opens, c copies resume cmd,
@@ -103,14 +157,14 @@ export default function App() {
         e.preventDefault();
         setActiveIdx((i) => {
           const next = Math.min(i + 1, filtered.length - 1);
-          if (next !== i) setTimeout(scrollActiveIntoView, 0);
+          if (next !== i) setTimeout(() => scrollActiveIntoView(next), 0);
           return next;
         });
       } else if (e.key === "k" || e.key === "ArrowUp") {
         e.preventDefault();
         setActiveIdx((i) => {
           const next = Math.max(i - 1, 0);
-          if (next !== i) setTimeout(scrollActiveIntoView, 0);
+          if (next !== i) setTimeout(() => scrollActiveIntoView(next), 0);
           return next;
         });
       } else if (e.key === "Enter") {
@@ -128,7 +182,7 @@ export default function App() {
       } else if (e.key === "u") {
         e.preventDefault();
         const item = filtered[safeActiveIdx];
-        if (item?.usage) setUsageOpenRequest((n) => n + 1);
+        if (item?.usage) setUsageSession(item);
       }
     };
     document.addEventListener("keydown", handler);
@@ -147,7 +201,7 @@ export default function App() {
         );
         if (idx >= 0) {
           setActiveIdx(idx);
-          setTimeout(scrollActiveIntoView, 0);
+          setTimeout(() => scrollActiveIntoView(idx), 0);
         }
       });
     },
@@ -191,23 +245,46 @@ export default function App() {
             No matching sessions. Try a different query.
           </div>
         )}
-        {!loading &&
-          !error &&
-          filtered.map((item, idx) => (
-            <SessionCard
-              key={sessionKey(item)}
-              session={item}
-              index={idx}
-              active={idx === safeActiveIdx}
-              pinned={isPinned(item)}
-              queryText={queryText}
-              onPin={() => togglePin(item)}
-              onActivate={() => setActiveIdx(idx)}
-              usageOpenRequest={
-                idx === safeActiveIdx ? usageOpenRequest : 0
-              }
-            />
-          ))}
+        {!loading && !error && filtered.length > 0 && (
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              position: "relative",
+            }}
+          >
+            {virtualizer.getVirtualItems().map((vi) => {
+              const item = filtered[vi.index];
+              return (
+                <div
+                  key={sessionKey(item)}
+                  data-index={vi.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${vi.start - scrollMargin}px)`,
+                    zIndex: vi.index === safeActiveIdx ? 10 : undefined,
+                  }}
+                >
+                  <div style={{ marginBottom: "18px" }}>
+                    <SessionCard
+                      session={item}
+                      index={vi.index}
+                      active={vi.index === safeActiveIdx}
+                      pinned={isPinned(item)}
+                      queryText={queryText}
+                      onPin={handlePin}
+                      onActivate={handleActivate}
+                      onUsageOpen={handleUsageOpen}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {paletteOpen && (
@@ -216,6 +293,24 @@ export default function App() {
           onJump={jumpToSession}
           onClose={() => setPaletteOpen(false)}
         />
+      )}
+
+      {usageSession && (
+        <UsageModal
+          session={usageSession}
+          onClose={() => setUsageSession(null)}
+        />
+      )}
+
+      {showTop && (
+        <button
+          className="back-to-top"
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          aria-label="Back to top"
+        >
+          ↑
+        </button>
       )}
     </main>
   );

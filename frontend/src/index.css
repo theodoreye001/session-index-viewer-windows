@@ -155,9 +155,6 @@
 
       .board {
         margin-top: 24px;
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 18px;
       }
 
       .card {
@@ -1073,10 +1070,6 @@
           grid-template-columns: 1fr;
         }
 
-        .board {
-          grid-template-columns: 1fr;
-        }
-
         .card {
           grid-template-columns: 1fr;
           gap: 18px;
@@ -1117,6 +1110,33 @@
       .card.is-active {
         outline: 2px solid var(--accent, var(--codex));
         outline-offset: 2px;
+      }
+
+      /* Back-to-top button: fixed in bottom-right, appears after scroll. */
+      .back-to-top {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: var(--panel-strong, #fffaf2);
+        box-shadow: 0 6px 20px rgba(31, 26, 23, 0.18);
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+        transition: opacity 0.2s, transform 0.2s;
+      }
+
+      .back-to-top:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 28px rgba(31, 26, 23, 0.22);
       }
 
       /* Command palette modal (Cmd+K). Uses the native <dialog> element
