@@ -2,7 +2,7 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-Local web viewer for AI coding CLI sessions on this machine. Browse recent
+Local web viewer for AI coding CLI sessions on this machine. Browse
 sessions from **Claude Code**, **Codex**, **Devin**, and **Grok** in one place,
 search across tools, inspect token/tool usage when metadata exists, and resume
 any session in a new Terminal window with a single click.
@@ -49,7 +49,9 @@ cd frontend && npm install && npm run build
 
 Usage on the card is a short chip (`ctx · out · tools · turns`). Click it (or
 press **`u`** on the active card) for a modal with overview KPIs, token mix,
-activity counts, and a short note on how that source measures tokens.
+activity counts, a **context pressure bar** (peak context vs. the model's
+window limit, colour-coded green / yellow / red), and a short note on how
+that source measures tokens.
 
 **Context** is peak / window occupancy — not a full-session billing total.
 Grok often only has that size signal (labelled **size only** on the chip).

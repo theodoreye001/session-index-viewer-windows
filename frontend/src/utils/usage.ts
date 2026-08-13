@@ -42,6 +42,81 @@ export function contextSize(u: SessionUsage): number {
   return u.peak_context_tokens || u.input_tokens || 0;
 }
 
+/**
+ * Model family → max context window (in tokens). Matched by prefix
+ * against the model string. Falls back to a source-based default
+ * when the model is unknown or empty.
+ *
+ * Values reflect publicly documented context windows as of 2026-08.
+ * 1m variants get a higher limit; everything else uses the base.
+ */
+const CONTEXT_LIMITS: { prefix: string; limit: number }[] = [
+  // Claude — 200K standard, 1M for extended variants
+  { prefix: "claude-opus-4-6-thinking-1m", limit: 1_000_000 },
+  { prefix: "claude-opus-4-1m", limit: 1_000_000 },
+  { prefix: "claude-sonnet-4-1m", limit: 1_000_000 },
+  { prefix: "claude", limit: 200_000 },
+  // GPT / Codex — 128K standard, 1M for codex-max variants
+  { prefix: "gpt-5.1-codex-max", limit: 1_000_000 },
+  { prefix: "gpt-5-codex", limit: 400_000 },
+  { prefix: "gpt-5.3-codex", limit: 400_000 },
+  { prefix: "gpt-5.6", limit: 400_000 },
+  { prefix: "gpt-5.5", limit: 400_000 },
+  { prefix: "gpt-5.4", limit: 400_000 },
+  { prefix: "gpt-5", limit: 128_000 },
+  { prefix: "gpt-4", limit: 128_000 },
+  // GLM — 128K standard, 1M for -1m variants
+  { prefix: "glm-5-2-1m", limit: 1_000_000 },
+  { prefix: "glm", limit: 128_000 },
+  // Gemini
+  { prefix: "gemini-3", limit: 1_000_000 },
+  { prefix: "gemini-2", limit: 1_000_000 },
+  { prefix: "gemini", limit: 128_000 },
+  // Grok
+  { prefix: "grok-4", limit: 256_000 },
+  { prefix: "grok", limit: 128_000 },
+  // DeepSeek
+  { prefix: "deepseek", limit: 128_000 },
+  // Kimi
+  { prefix: "kimi", limit: 128_000 },
+  // SWE
+  { prefix: "swe", limit: 128_000 },
+];
+
+const SOURCE_DEFAULT_LIMITS: Record<string, number> = {
+  claude: 200_000,
+  codex: 128_000,
+  devin: 128_000,
+  grok: 128_000,
+};
+
+export function modelContextLimit(model: string, source: string): number {
+  const m = (model || "").toLowerCase();
+  for (const entry of CONTEXT_LIMITS) {
+    if (m.startsWith(entry.prefix)) return entry.limit;
+  }
+  return SOURCE_DEFAULT_LIMITS[source] || 128_000;
+}
+
+/** Context fill percentage (0–100), or null when context is 0. */
+export function contextPressure(
+  u: SessionUsage,
+  model: string,
+  source: string,
+): number | null {
+  const ctx = contextSize(u);
+  if (ctx <= 0) return null;
+  const limit = modelContextLimit(model, source);
+  return Math.min(100, Math.round((ctx / limit) * 100));
+}
+
+/** Color bucket for a pressure percentage. */
+export function pressureColor(pct: number): string {
+  if (pct >= 85) return "var(--usage-pressure-high)";
+  if (pct >= 60) return "var(--usage-pressure-mid)";
+  return "var(--usage-pressure-low)";
+}
+
 export interface TokenMixPart {
   key: string;
   label: string;

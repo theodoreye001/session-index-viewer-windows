@@ -3,7 +3,7 @@
 [English](README.md) · **简体中文**
 
 本机浏览 AI 编程 CLI 会话的小工具。合并 **Claude Code**、**Codex**、**Devin**、
-**Grok** 的近期 session，可搜索，可看 token / 工具用量（有元数据时），一键在
+**Grok** 的 session，可搜索，可看 token / 工具用量（有元数据时），一键在
 Terminal 新窗口里 resume。
 
 <p align="center">
@@ -44,7 +44,8 @@ cd frontend && npm install && npm run build
 | Grok | `$GROK_HOME/sessions`（默认 `~/.grok/sessions`） | `grok --resume <id>` | 磁盘上多为 **上下文占用**（`signals.json`）；无头单次（`is_non_interactive`）会跳过 |
 
 卡片上的 usage 是短 chip（`ctx · out · tools · turns`）。点击，或在选中卡片后
-按 **`u`**，打开 modal：Overview KPI、token 分项、Activity、以及该 source
+按 **`u`**，打开 modal：Overview KPI、token 分项、Activity、**上下文压力条**
+（峰值 context 占该模型窗口上限的百分比，绿 / 黄 / 红三色），以及该 source
 的计量口径说明。
 
 **Context** 表示峰值 / 窗口占用，不是整场会话的计费 total。Grok 往往只有

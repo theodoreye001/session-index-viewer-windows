@@ -18,6 +18,9 @@
         --usage-output: #b3532f;
         --usage-cache-read: #2d6cdf;
         --usage-cache-write: #9a6b2f;
+        --usage-pressure-low: #4a8a5e;
+        --usage-pressure-mid: #c9942e;
+        --usage-pressure-high: #c44a3a;
         /* Strong ease-out for press / modal enter (Emil) */
         --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
       }
@@ -622,6 +625,43 @@
         margin-bottom: 2px;
         color: var(--grok);
         font-size: 12px;
+      }
+
+      .usage-pressure {
+        margin-top: 10px;
+      }
+
+      .usage-pressure-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 6px;
+      }
+
+      .usage-pressure-label {
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .usage-pressure-value {
+        font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .usage-pressure-track {
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(46, 36, 27, 0.08);
+        overflow: hidden;
+      }
+
+      .usage-pressure-fill {
+        height: 100%;
+        border-radius: 999px;
+        transition: width 0.3s var(--ease-out);
       }
 
       .usage-kpi-grid {

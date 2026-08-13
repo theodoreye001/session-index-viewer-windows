@@ -8,9 +8,12 @@ import {
 } from "../utils/format";
 import {
   cacheHitRate,
+  contextPressure,
   contextSize,
   isContextOnlyUsage,
   lifetimeTotal,
+  modelContextLimit,
+  pressureColor,
   tokenMixParts,
   usageCopyText,
   usageSemanticsNote,
@@ -97,6 +100,8 @@ export function UsageModal({
   const hit = cacheHitRate(usage);
   const total = lifetimeTotal(usage);
   const ctx = contextSize(usage);
+  const ctxLimit = modelContextLimit(usage.model, session.source);
+  const pressure = contextPressure(usage, usage.model, session.source);
 
   const handleCopy = async () => {
     try {
@@ -237,6 +242,30 @@ export function UsageModal({
               </div>
             ))}
           </div>
+          {pressure !== null && (
+            <div className="usage-pressure">
+              <div className="usage-pressure-head">
+                <span className="usage-pressure-label">
+                  Context pressure
+                </span>
+                <span
+                  className="usage-pressure-value"
+                  style={{ color: pressureColor(pressure) }}
+                >
+                  {pressure}% of {formatTokens(ctxLimit)}
+                </span>
+              </div>
+              <div className="usage-pressure-track">
+                <div
+                  className="usage-pressure-fill"
+                  style={{
+                    width: `${pressure}%`,
+                    background: pressureColor(pressure),
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </section>
 
         {contextOnly ? (
