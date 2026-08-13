@@ -3,7 +3,7 @@
 set -euo pipefail
 
 output_path="${1:-./sessions-index.json}"
-limit="${2:-${SESSION_INDEX_LIMIT:-100}}"
+limit="${2:-${SESSION_INDEX_LIMIT:-1000}}"
 tmp_file="$(mktemp)"
 candidate_file="$(mktemp)"
 

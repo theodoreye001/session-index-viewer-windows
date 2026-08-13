@@ -70,7 +70,7 @@ Grok often only has that size signal (labelled **size only** on the chip).
 - `server.py` — thin entry point (`python3 server.py` / launchd).
 - `siv/` — stdlib-only backend on `127.0.0.1:7333`:
   - `GET /` serves the viewer.
-  - `GET /api/sessions?limit=100` scans session files live, with an
+  - `GET /api/sessions?limit=1000` scans session files live, with an
     mtime/size cache so only changed files are re-parsed.
   - `POST /api/resume` opens a Terminal window with a validated
     `cd <cwd> && <tool> resume <id>` command. If the recorded cwd belongs

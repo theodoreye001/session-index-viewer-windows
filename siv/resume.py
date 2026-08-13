@@ -37,12 +37,15 @@ def open_in_terminal(command):
         # `open -na` with --args -e. Ghostty's -e expects argv with no
         # shell interpretation, so wrap in `zsh -l -c` to handle `&&`,
         # PATH, and aliases from the user's shell config.
+        # --window-save-state=never prevents the new instance from
+        # restoring the previous window layout (tabs, splits, etc.).
         subprocess.Popen(
             [
                 "open",
                 "-na",
                 "Ghostty.app",
                 "--args",
+                "--window-save-state=never",
                 "-e",
                 "zsh",
                 "-l",

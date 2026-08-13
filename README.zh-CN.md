@@ -66,7 +66,7 @@ size 信号（chip 上标 **size only**）。
 - `server.py` — 薄入口（`python3 server.py` / launchd）。
 - `siv/` — 仅标准库的后端，监听 `127.0.0.1:7333`：
   - `GET /` 返回页面。
-  - `GET /api/sessions?limit=100` 实时扫描 session，按 mtime/size 缓存。
+  - `GET /api/sessions?limit=1000` 实时扫描 session，按 mtime/size 缓存。
   - `POST /api/resume` 校验后打开终端执行
     `cd <cwd> && <工具> resume <id>`。若 cwd 是另一台机器的 home 前缀，
     会先映射到本机。

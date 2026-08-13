@@ -38,8 +38,8 @@ HOME_DIR_RE = re.compile(r"^/(?:Users|home)/([^/]+)")
 LOCAL_USER = os.path.basename(LOCAL_HOME.rstrip("/")) or "unknown"
 CURRENT_CWD = os.getcwd() if os.path.isdir(os.getcwd()) else LOCAL_HOME
 
-DEFAULT_LIMIT = 100
-MAX_LIMIT = 500
+DEFAULT_LIMIT = 1000
+MAX_LIMIT = 1000
 CLIP_LEN = 360
 
 # Files larger than this are read head + tail only; smaller ones whole.

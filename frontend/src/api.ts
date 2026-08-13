@@ -1,6 +1,6 @@
 import type { Session } from "./types";
 
-export async function fetchSessions(limit = 100): Promise<Session[]> {
+export async function fetchSessions(limit = 1000): Promise<Session[]> {
   const res = await fetch(`/api/sessions?limit=${limit}`, {
     cache: "no-store",
   });
