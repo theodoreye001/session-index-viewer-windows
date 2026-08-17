@@ -22,7 +22,21 @@ LEGACY_HTML = os.path.join(ROOT, "sessions-index.html")
 CLAUDE_GLOB = os.path.expanduser("~/.claude/projects/*/*.jsonl")
 CODEX_GLOB = os.path.expanduser("~/.codex/sessions/*/*/*/rollout-*.jsonl")
 
+# Pi agent sessions: ~/.pi/agent/sessions/<encoded-cwd>/<ts>_<uuid>.jsonl.
+# Per-file JSONL (session/model_change/message records), so it merges into
+# the same mtime-ranked candidate list as Claude/Codex.
+PI_GLOB = os.path.expanduser("~/.pi/agent/sessions/*/*.jsonl")
+
 DEVIN_DB = os.path.expanduser("~/.local/share/devin/cli/sessions.db")
+
+# GitHub Copilot CLI: one SQLite store with a clean turns table
+# (pre-formatted user/assistant text) and per-turn usage events.
+COPILOT_DB = os.path.expanduser("~/.copilot/session-store.db")
+
+# opencode: single SQLite store. Conversation text lives in `part` rows
+# (type=text) linked to `message` rows (role). Session-level token sums
+# and model are denormalised onto the `session` row.
+OPENCODE_DB = os.path.expanduser("~/.local/share/opencode/opencode.db")
 
 # Grok sessions live under $GROK_HOME/sessions/<encoded-cwd>/<uuid>/
 # (default GROK_HOME is ~/.grok). Each session is a directory of JSON/JSONL
@@ -56,6 +70,7 @@ SKIP_USER_PREFIXES = (
     "<user-prompt-submit-hook",
     "<environment_context>",
     "<turn_aborted>",
+    "<skill-context",
 )
 
 SESSION_ID_RE = re.compile(r"^[0-9a-fA-F][0-9a-fA-F-]{6,62}[0-9a-fA-F]$")
@@ -68,4 +83,6 @@ DEVIN_ID_RE = re.compile(r"^[a-z][a-z0-9-]{2,62}$")
 TERMINAL_APP = "auto"
 
 # Sources accepted by POST /api/resume.
-RESUME_SOURCES = frozenset({"claude", "codex", "devin", "grok"})
+RESUME_SOURCES = frozenset(
+    {"claude", "codex", "devin", "grok", "pi", "copilot", "opencode"}
+)

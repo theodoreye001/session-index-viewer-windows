@@ -59,6 +59,9 @@ export function Toolbar({
           <option value="claude">Claude</option>
           <option value="devin">Devin</option>
           <option value="grok">Grok</option>
+          <option value="pi">Pi</option>
+          <option value="copilot">Copilot</option>
+          <option value="opencode">opencode</option>
         </select>
       </div>
 

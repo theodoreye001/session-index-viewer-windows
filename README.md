@@ -3,12 +3,13 @@
 **English** · [简体中文](README.zh-CN.md)
 
 Local web viewer for AI coding CLI sessions on this machine. Browse
-sessions from **Claude Code**, **Codex**, **Devin**, and **Grok** in one place,
+sessions from **Claude Code**, **Codex**, **Devin**, **Grok**, **Pi**,
+**Copilot CLI**, and **opencode** in one place,
 search across tools, inspect token/tool usage when metadata exists, and resume
 any session in a new Terminal window with a single click.
 
 <p align="center">
-  <img src="docs/screenshot.jpg" alt="Session Index Viewer — browse and resume Claude Code / Codex / Devin / Grok sessions" width="900" />
+  <img src="docs/screenshot.jpg" alt="Session Index Viewer — browse and resume Claude Code / Codex / Devin / Grok / Pi / Copilot / opencode sessions" width="900" />
 </p>
 
 CLI resume lists (`claude --resume`, `codex resume`, `grok --resume`, …) show
@@ -46,6 +47,9 @@ cd frontend && npm install && npm run build
 | Codex | `~/.codex/sessions/**/rollout-*.jsonl` | `codex resume <id>` | Last cumulative `token_count`; context ≈ max per-turn total |
 | Devin | `~/.local/share/devin/cli/sessions.db` | `devin -r <id>` | Aggregated from `message_nodes` |
 | Grok | `$GROK_HOME/sessions` (default `~/.grok/sessions`) | `grok --resume <id>` | **Context size only** on disk (`signals.json`); headless one-shots (`is_non_interactive`) are skipped |
+| Pi | `~/.pi/agent/sessions/*/*.jsonl` | `pi --session <id>` | Sums each assistant turn's `message.usage`; context ≈ largest per-turn total |
+| Copilot CLI | `~/.copilot/session-store.db` | `copilot --resume <id>` | Sums per-turn `assistant_usage_events`; context ≈ peak input tokens |
+| opencode | `~/.local/share/opencode/opencode.db` | `opencode --session <id>` | Cumulative `session` token sums; context ≈ largest assistant message total |
 
 Usage on the card is a short chip (`ctx · out · tools · turns`). Click it (or
 press **`u`** on the active card) for a modal with overview KPIs, token mix,
@@ -79,7 +83,8 @@ Grok often only has that size signal (labelled **size only** on the chip).
     to another machine, the home-dir prefix is remapped to this machine.
   - Host badges come from the username in each session’s cwd
     (`/Users/<name>/...` or `/home/<name>/...`).
-  - Parsers: `siv/sources/` (`claude`, `codex`, `devin`, `grok`).
+  - Parsers: `siv/sources/` (`claude`, `codex`, `devin`, `grok`, `pi`,
+    `copilot`, `opencode`).
 - `frontend/` — React card UI (search, source/host filters, pin, usage modal).
 - `sessions-index.html` — legacy single-file viewer (fallback if dist is missing).
 - `install.sh` — launchd plist + optional frontend build. Logs:
@@ -95,7 +100,10 @@ If you sync session trees with Syncthing (or similar):
 | `~/.claude/projects` | Yes (per-file jsonl) |
 | `~/.codex/sessions` | Yes (per-file jsonl) |
 | `~/.grok/sessions` | Yes if you sync only session dirs and ignore `session_search.sqlite` / `*.lock` |
+| `~/.pi/agent/sessions` | Yes (per-file jsonl) |
 | Devin `sessions.db` | **No** — single SQLite DB does not merge across machines |
+| Copilot `session-store.db` | **No** — single SQLite DB does not merge across machines |
+| opencode `opencode.db` | **No** — single SQLite DB does not merge across machines |
 
 No extra viewer config is required: each session is labelled by the username
 in its recorded cwd, and the host filter picks those labels up. Sessions that

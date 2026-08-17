@@ -7,6 +7,7 @@ import { sessionKey } from "./utils/format";
 import { postResume } from "./api";
 import { Toolbar } from "./components/Toolbar";
 import { SessionCard } from "./components/SessionCard";
+import { SkeletonCard } from "./components/SkeletonCard";
 import { CommandPalette } from "./components/CommandPalette";
 import { UsageModal } from "./components/UsageModal";
 
@@ -234,7 +235,14 @@ export default function App() {
       </section>
 
       <section ref={boardRef} className="board" aria-live="polite">
-        {loading && <div className="empty">Loading sessions…</div>}
+        {loading && (
+          <div className="skeleton-list" aria-busy="true" aria-live="polite">
+            <span className="sr-only">Loading sessions…</span>
+            {Array.from({ length: 6 }, (_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        )}
         {error && (
           <div className="empty">
             Failed to load /api/sessions. Is server.py running?

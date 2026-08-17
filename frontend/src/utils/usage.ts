@@ -88,6 +88,9 @@ const SOURCE_DEFAULT_LIMITS: Record<string, number> = {
   codex: 128_000,
   devin: 128_000,
   grok: 128_000,
+  pi: 128_000,
+  copilot: 200_000,
+  opencode: 128_000,
 };
 
 export function modelContextLimit(model: string, source: string): number {
@@ -236,6 +239,15 @@ export function usageSemanticsNote(source: string, contextOnly: boolean): string
   }
   if (source === "devin") {
     return "Devin aggregates metrics from its session database (lifetime sums). Context is peak assistant input tokens.";
+  }
+  if (source === "pi") {
+    return "Pi sums each assistant turn’s usage from the session JSONL. Context is the largest single-turn total seen.";
+  }
+  if (source === "copilot") {
+    return "Copilot CLI sums per-turn usage events from its session store. Context is the largest single-turn input tokens.";
+  }
+  if (source === "opencode") {
+    return "opencode reports cumulative token sums per session. Context is the largest single assistant message total.";
   }
   return "Token fields are best-effort from on-disk metadata; adapters differ.";
 }

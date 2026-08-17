@@ -88,6 +88,9 @@ export function sourceAccent(source: string): string {
   if (source === "claude") return "var(--claude)";
   if (source === "devin") return "var(--devin)";
   if (source === "grok") return "var(--grok)";
+  if (source === "pi") return "var(--pi)";
+  if (source === "copilot") return "var(--copilot)";
+  if (source === "opencode") return "var(--opencode)";
   return "var(--codex)";
 }
 

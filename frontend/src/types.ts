@@ -16,7 +16,7 @@ export interface SessionUsage {
 }
 
 export interface Session {
-  source: "claude" | "codex" | "devin" | "grok" | string;
+  source: "claude" | "codex" | "devin" | "grok" | "pi" | "copilot" | "opencode" | string;
   host: string;
   timestamp: string;
   cwd: string;
@@ -29,4 +29,12 @@ export interface Session {
   usage: SessionUsage | null;
 }
 
-export type SourceFilter = "all" | "claude" | "codex" | "devin" | "grok";
+export type SourceFilter =
+  | "all"
+  | "claude"
+  | "codex"
+  | "devin"
+  | "grok"
+  | "pi"
+  | "copilot"
+  | "opencode";

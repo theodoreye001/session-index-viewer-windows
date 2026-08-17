@@ -15,6 +15,12 @@ def resume_command(source, session_id, cwd):
         base = f"claude --resume {session_id}"
     elif source == "grok":
         base = f"grok --resume {session_id}"
+    elif source == "pi":
+        base = f"pi --session {session_id}"
+    elif source == "copilot":
+        base = f"copilot --resume {session_id}"
+    elif source == "opencode":
+        base = f"opencode --session {session_id}"
     else:
         base = f"codex resume {session_id}"
     resolved_cwd = resolve_resume_cwd(cwd)

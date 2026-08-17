@@ -3,11 +3,12 @@
 [English](README.md) · **简体中文**
 
 本机浏览 AI 编程 CLI 会话的小工具。合并 **Claude Code**、**Codex**、**Devin**、
-**Grok** 的 session，可搜索，可看 token / 工具用量（有元数据时），一键在
+**Grok**、**Pi**、**Copilot CLI**、**opencode** 的 session，可搜索，可看 token /
+工具用量（有元数据时），一键在
 Terminal 新窗口里 resume。
 
 <p align="center">
-  <img src="docs/screenshot.jpg" alt="Session Index Viewer — 浏览并恢复 Claude Code / Codex / Devin / Grok 会话" width="900" />
+  <img src="docs/screenshot.jpg" alt="Session Index Viewer — 浏览并恢复 Claude Code / Codex / Devin / Grok / Pi / Copilot / opencode 会话" width="900" />
 </p>
 
 各 CLI 的 resume 列表多半只有 session ID 和时间戳，看不出当时在聊什么。本工具
@@ -42,6 +43,9 @@ cd frontend && npm install && npm run build
 | Codex | `~/.codex/sessions/**/rollout-*.jsonl` | `codex resume <id>` | 取最后一次累计 `token_count`；Context 约为各轮 total 最大 |
 | Devin | `~/.local/share/devin/cli/sessions.db` | `devin -r <id>` | 从 `message_nodes` 聚合 |
 | Grok | `$GROK_HOME/sessions`（默认 `~/.grok/sessions`） | `grok --resume <id>` | 磁盘上多为 **上下文占用**（`signals.json`）；无头单次（`is_non_interactive`）会跳过 |
+| Pi | `~/.pi/agent/sessions/*/*.jsonl` | `pi --session <id>` | 累加每轮 assistant 的 `message.usage`；Context 约为各轮 total 最大 |
+| Copilot CLI | `~/.copilot/session-store.db` | `copilot --resume <id>` | 累加每轮 `assistant_usage_events`；Context 约为单轮 input 峰值 |
+| opencode | `~/.local/share/opencode/opencode.db` | `opencode --session <id>` | 取 `session` 累计 token 汇总；Context 约为单条 assistant 消息 total 最大 |
 
 卡片上的 usage 是短 chip（`ctx · out · tools · turns`）。点击，或在选中卡片后
 按 **`u`**，打开 modal：Overview KPI、token 分项、Activity、**上下文压力条**
@@ -72,7 +76,8 @@ size 信号（chip 上标 **size only**）。
     `cd <cwd> && <工具> resume <id>`。若 cwd 是另一台机器的 home 前缀，
     会先映射到本机。
   - Host 标签取自 cwd 中的用户名（`/Users/<name>/...` 或 `/home/<name>/...`）。
-  - 解析逻辑在 `siv/sources/`（`claude` / `codex` / `devin` / `grok`）。
+  - 解析逻辑在 `siv/sources/`（`claude` / `codex` / `devin` / `grok` / `pi` /
+    `copilot` / `opencode`）。
 - `frontend/` — React 卡片 UI（搜索、source/host 过滤、置顶、usage modal）。
 - `sessions-index.html` — 旧版单文件 UI（无 dist 时回退）。
 - `install.sh` — 写入 launchd plist，并可构建前端。日志：
@@ -88,7 +93,10 @@ size 信号（chip 上标 **size only**）。
 | `~/.claude/projects` | 适合（按文件 jsonl） |
 | `~/.codex/sessions` | 适合（按文件 jsonl） |
 | `~/.grok/sessions` | 适合，建议只同步会话目录，并忽略 `session_search.sqlite`、`*.lock` |
+| `~/.pi/agent/sessions` | 适合（按文件 jsonl） |
 | Devin `sessions.db` | **不适合** — 单库 SQLite 无法多机合并 |
+| Copilot `session-store.db` | **不适合** — 单库 SQLite 无法多机合并 |
+| opencode `opencode.db` | **不适合** — 单库 SQLite 无法多机合并 |
 
 Viewer 无需额外配置：按 session 记录的 cwd 用户名打 host 标签，toolbar
 过滤器会列出这些 host。多台机器若 username 相同，会归到同一 host。

@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-08-17
+
+### Sources
+- **Three new session sources.** Added adapters for **Pi**
+  (`~/.pi/agent/sessions/*/*.jsonl`, per-file JSONL like Codex),
+  **Copilot CLI** (`~/.copilot/session-store.db`, SQLite `turns` +
+  `assistant_usage_events`), and **opencode**
+  (`~/.local/share/opencode/opencode.db`, SQLite `message`/`part`).
+  Each is searchable, resumable (`pi --session`, `copilot --resume`,
+  `opencode --session`), and reports token/tool usage. Source filter,
+  accent colours, and context-window limits updated accordingly.
+
+### Performance
+- **Skeleton loading state.** The board now renders shimmer placeholder
+  cards while `/api/sessions` is in flight instead of a blank
+  "Loading…" line, so the first paint no longer looks frozen (respects
+  `prefers-reduced-motion`).
+- **Faster Devin refetch.** The Devin adapter only re-aggregates
+  `message_nodes` usage for sessions whose `last_activity_at` changed.
+  A warm `/api/sessions` (e.g. on tab refocus) dropped from ~0.65s to
+  ~0.09s with no change to reported usage.
+
 ## 2026-08-11
 
 ### Performance

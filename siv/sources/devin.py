@@ -36,14 +36,26 @@ def collect(limit):
             (limit,),
         ).fetchall()
 
+        # Only sessions whose cached entry is stale (last_activity_at
+        # changed) need re-parsing. Aggregating usage over message_nodes
+        # is the dominant cost, so restrict it to those sids — a warm
+        # request where nothing changed then skips the big scan entirely.
+        stale_sids = [
+            sid
+            for sid, _cwd, _title, last_activity_at, _model, _created in sessions
+            if not (
+                (hit := cache.get(f"devin:{sid}")) and hit[0] == last_activity_at
+            )
+        ]
+
         # Aggregate token / tool / turn usage per session in one query so
         # we don't add N+1 round-trips. Matches the metrics fields Devin
         # CLI writes on every assistant message (see /session-stats).
         # peak_context_tokens = max(input_tokens) over assistant turns,
         # i.e. the largest context window this session ever occupied.
         usage_by_sid = {}
-        if sessions:
-            placeholders = ",".join("?" for _ in sessions)
+        if stale_sids:
+            placeholders = ",".join("?" for _ in stale_sids)
             rows = conn.execute(
                 "SELECT session_id, "
                 "  SUM(CASE WHEN json_extract(chat_message,'$.metadata.metrics.input_tokens') IS NOT NULL "
@@ -64,7 +76,7 @@ def collect(limit):
                 "    THEN json_extract(chat_message,'$.metadata.metrics.input_tokens') END) "
                 f"FROM message_nodes WHERE session_id IN ({placeholders}) "
                 "GROUP BY session_id",
-                [s[0] for s in sessions],
+                stale_sids,
             ).fetchall()
             for sid, inp, out, cr, cc, tools, turns, msgs, peak in rows:
                 usage_by_sid[sid] = {
