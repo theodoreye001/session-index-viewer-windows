@@ -20,7 +20,7 @@ from .config import (
     RESUME_SOURCES,
     SESSION_ID_RE,
 )
-from .resume import open_in_terminal, resume_command
+from .resume import open_in_terminal
 from .scan import scan_sessions
 
 
@@ -116,7 +116,11 @@ class Handler(BaseHTTPRequestHandler):
         if not id_re.match(session_id):
             self._send_json({"ok": False, "error": "bad session id"}, 400)
             return
-        open_in_terminal(resume_command(source, session_id, cwd))
+        try:
+            open_in_terminal(source, session_id, cwd)
+        except (OSError, RuntimeError) as exc:
+            self._send_json({"ok": False, "error": str(exc)}, 500)
+            return
         self._send_json({"ok": True})
 
     def log_message(self, fmt, *args):
