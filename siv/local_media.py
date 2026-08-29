@@ -19,7 +19,7 @@ _IMAGE_TYPES = {
     ".bmp": "image/bmp",
 }
 
-_FILE_URL_RE = re.compile(r"file:///[^^\s)\]<>\"']+", re.IGNORECASE)
+_FILE_URL_RE = re.compile(r"file:///[^\s)\]<>\"']+", re.IGNORECASE)
 _VIS_MARKER = "/.codex/visualizations/"
 
 
