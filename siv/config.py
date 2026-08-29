@@ -1,7 +1,9 @@
 """Paths, limits, and shared regexes."""
 
+import ntpath
 import os
 import re
+import sys
 
 PORT = 7333
 BIND = "127.0.0.1"
@@ -27,16 +29,60 @@ CODEX_GLOB = os.path.expanduser("~/.codex/sessions/*/*/*/rollout-*.jsonl")
 # the same mtime-ranked candidate list as Claude/Codex.
 PI_GLOB = os.path.expanduser("~/.pi/agent/sessions/*/*.jsonl")
 
-DEVIN_DB = os.path.expanduser("~/.local/share/devin/cli/sessions.db")
 
-# GitHub Copilot CLI: one SQLite store with a clean turns table
-# (pre-formatted user/assistant text) and per-turn usage events.
+def devin_data_dir(platform=None, env=None, home=None):
+    """Return the Devin for Terminal data directory for one platform."""
+    platform = platform or sys.platform
+    env = os.environ if env is None else env
+    home = os.path.expanduser("~") if home is None else home
+
+    override = (env.get("DEVIN_HOME") or "").strip()
+    if override:
+        return os.path.expanduser(override)
+
+    if platform == "win32":
+        roaming = (env.get("APPDATA") or "").strip()
+        if not roaming:
+            roaming = os.path.join(home, "AppData", "Roaming")
+        return os.path.join(roaming, "devin", "cli")
+    if platform == "darwin":
+        return os.path.join(home, "Library", "Application Support", "devin", "cli")
+    return os.path.join(home, ".local", "share", "devin", "cli")
+
+
+def opencode_db_path(env=None, home=None):
+    """Return the OpenCode SQLite path, honoring supported overrides."""
+    env = os.environ if env is None else env
+    home = os.path.expanduser("~") if home is None else home
+
+    xdg_data = (env.get("XDG_DATA_HOME") or "").strip()
+    data_dir = (
+        os.path.join(os.path.expanduser(xdg_data), "opencode")
+        if xdg_data
+        else os.path.join(home, ".local", "share", "opencode")
+    )
+
+    override = (env.get("OPENCODE_DB") or "").strip()
+    if override:
+        override = os.path.expanduser(override)
+        if os.path.isabs(override) or ntpath.isabs(override):
+            return override
+        return os.path.join(data_dir, override)
+    return os.path.join(data_dir, "opencode.db")
+
+
+DEVIN_DATA_DIR = devin_data_dir()
+DEVIN_DB = os.path.join(DEVIN_DATA_DIR, "sessions.db")
+
+# GitHub Copilot CLI. session-store.db contains cross-session indexes and
+# denormalized turns; session-state/<id>/events.jsonl is the durable session
+# history used by resume. The adapter can use the latter when the DB is absent.
 COPILOT_DB = os.path.expanduser("~/.copilot/session-store.db")
+COPILOT_SESSION_STATE = os.path.expanduser("~/.copilot/session-state")
 
-# opencode: single SQLite store. Conversation text lives in `part` rows
-# (type=text) linked to `message` rows (role). Session-level token sums
-# and model are denormalised onto the `session` row.
-OPENCODE_DB = os.path.expanduser("~/.local/share/opencode/opencode.db")
+# OpenCode uses the XDG-style data directory on every platform, including
+# Windows. OPENCODE_DB and XDG_DATA_HOME are respected when configured.
+OPENCODE_DB = opencode_db_path()
 
 # Grok sessions live under $GROK_HOME/sessions/<encoded-cwd>/<uuid>/
 # (default GROK_HOME is ~/.grok). Each session is a directory of JSON/JSONL
