@@ -16,19 +16,29 @@ $StartupLink = Join-Path $StartupDir "session-index-viewer.lnk"
 $PowerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 
 function Resolve-PythonExecutable {
-    $py = Get-Command py.exe -ErrorAction SilentlyContinue
-    if ($py) {
-        $resolved = (& $py.Source -3 -c "import sys; print(sys.executable)" 2>$null | Select-Object -First 1).Trim()
-        if ($resolved -and (Test-Path $resolved)) {
-            return $resolved
+    # Prefer the python.exe already selected by PATH. This respects active
+    # environments and CI setup-python. Fall back to the Windows py launcher.
+    $python = Get-Command python.exe -ErrorAction SilentlyContinue
+    if ($python) {
+        $output = & $python.Source -c "import sys; print(sys.executable)" 2>$null |
+            Select-Object -First 1
+        if ($output) {
+            $resolved = ([string]$output).Trim()
+            if ($resolved -and (Test-Path $resolved)) {
+                return $resolved
+            }
         }
     }
 
-    $python = Get-Command python.exe -ErrorAction SilentlyContinue
-    if ($python) {
-        $resolved = (& $python.Source -c "import sys; print(sys.executable)" 2>$null | Select-Object -First 1).Trim()
-        if ($resolved -and (Test-Path $resolved)) {
-            return $resolved
+    $py = Get-Command py.exe -ErrorAction SilentlyContinue
+    if ($py) {
+        $output = & $py.Source -3 -c "import sys; print(sys.executable)" 2>$null |
+            Select-Object -First 1
+        if ($output) {
+            $resolved = ([string]$output).Trim()
+            if ($resolved -and (Test-Path $resolved)) {
+                return $resolved
+            }
         }
     }
 
@@ -150,6 +160,9 @@ if ($scheduledTaskAvailable) {
             -Description "Local AI CLI session viewer on http://127.0.0.1:7333" `
             -Force | Out-Null
 
+        # A previous fallback install may have left a Startup shortcut. Once
+        # Task Scheduler succeeds, remove it so login cannot trigger twice.
+        Remove-Item $StartupLink -Force -ErrorAction SilentlyContinue
         Set-Content -Path $ModeFile -Value "task" -Encoding ASCII
         $installMode = "task"
     }
