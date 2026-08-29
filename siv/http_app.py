@@ -1,4 +1,4 @@
-"""HTTP server: static viewer + /api/sessions + /api/resume."""
+"""HTTP server: static viewer + session/resume/local-media APIs."""
 
 import json
 import mimetypes
@@ -20,6 +20,7 @@ from .config import (
     RESUME_SOURCES,
     SESSION_ID_RE,
 )
+from .local_media import resolve_codex_visualization
 from .resume import open_in_terminal
 from .scan import scan_sessions
 
@@ -57,6 +58,22 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _serve_local_image(self, path, content_type):
+        try:
+            with open(path, "rb") as f:
+                body = f.read()
+        except OSError:
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "private, max-age=300")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
@@ -76,6 +93,14 @@ class Handler(BaseHTTPRequestHandler):
                     limit = DEFAULT_LIMIT
                 limit = max(1, min(limit, MAX_LIMIT))
                 self._send_json(scan_sessions(limit))
+            elif path == "/api/codex-visualization":
+                relative = parse_qs(parsed.query).get("path", [""])[0]
+                try:
+                    image_path, content_type = resolve_codex_visualization(relative)
+                except (OSError, ValueError):
+                    self.send_error(404)
+                    return
+                self._serve_local_image(image_path, content_type)
             else:
                 self.send_error(404)
         else:
