@@ -2,6 +2,7 @@
 
 import ntpath
 import os
+import posixpath
 import re
 import sys
 
@@ -43,11 +44,11 @@ def devin_data_dir(platform=None, env=None, home=None):
     if platform == "win32":
         roaming = (env.get("APPDATA") or "").strip()
         if not roaming:
-            roaming = os.path.join(home, "AppData", "Roaming")
-        return os.path.join(roaming, "devin", "cli")
+            roaming = ntpath.join(home, "AppData", "Roaming")
+        return ntpath.join(roaming, "devin", "cli")
     if platform == "darwin":
-        return os.path.join(home, "Library", "Application Support", "devin", "cli")
-    return os.path.join(home, ".local", "share", "devin", "cli")
+        return posixpath.join(home, "Library", "Application Support", "devin", "cli")
+    return posixpath.join(home, ".local", "share", "devin", "cli")
 
 
 def opencode_db_path(env=None, home=None):
