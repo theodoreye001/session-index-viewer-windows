@@ -43,12 +43,11 @@ OPENCODE_DB = os.path.expanduser("~/.local/share/opencode/opencode.db")
 # files; summary.json is the index entry and updates.jsonl is the
 # authoritative conversation stream used by `grok --resume`.
 
-# Sessions synced across machines (e.g. via syncthing) keep the cwd
-# they were recorded with. host_for() infers a label from the home-dir
-# prefix: cwds under /Users/<name>/ or /home/<name>/ are labelled with
-# that <name>, including this machine's own home.
+# Sessions synced across machines keep their recorded cwd. host.py handles
+# macOS/Linux homes, native Windows C:\Users\..., and Windows paths viewed
+# through WSL (/mnt/c/Users/...). Drive-root project paths that contain no
+# username fall back to this machine's LOCAL_USER label.
 LOCAL_HOME = os.path.expanduser("~")
-HOME_DIR_RE = re.compile(r"^/(?:Users|home)/([^/]+)")
 LOCAL_USER = os.path.basename(LOCAL_HOME.rstrip("/")) or "unknown"
 CURRENT_CWD = os.getcwd() if os.path.isdir(os.getcwd()) else LOCAL_HOME
 
