@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-08-29
+## v0.1.0 - 2026-08-30
 
 ### Windows support
 - **Native session discovery and resume.** Added Windows Terminal launch with a
@@ -36,6 +36,9 @@
   frontend build verification, PowerShell parser checks, and a Windows smoke
   job that performs an actual install, HTTP health check, autostart validation,
   and uninstall.
+- **Formal support policy.** Added versioning, release notes, a permanent
+  Windows guide, a compatibility matrix, a support policy, and a repeatable
+  release checklist for the maintained fork.
 
 ## 2026-08-17
 
