@@ -2,42 +2,84 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-Local web viewer for AI coding CLI sessions on this machine. Browse
-sessions from **Claude Code**, **Codex**, **Devin**, **Grok**, **Pi**,
-**Copilot CLI**, and **opencode** in one place,
-search across tools, inspect token/tool usage when metadata exists, and resume
-any session in a new Terminal window with a single click.
+Current supported fork release: **v0.1.0**.
+
+Local web viewer for AI coding CLI sessions on this machine. Browse sessions
+from **Claude Code**, **Codex**, **Devin**, **Grok**, **Pi**, **Copilot CLI**,
+and **opencode** in one place, search across tools, inspect token/tool usage
+when metadata exists, and resume a session in a fresh terminal window.
 
 <p align="center">
-  <img src="docs/screenshot.jpg" alt="Session Index Viewer — browse and resume Claude Code / Codex / Devin / Grok / Pi / Copilot / opencode sessions" width="900" />
+  <img src="docs/screenshot.jpg" alt="Session Index Viewer: browse and resume Claude Code / Codex / Devin / Grok / Pi / Copilot / opencode sessions" width="900" />
 </p>
 
-CLI resume lists (`claude --resume`, `codex resume`, `grok --resume`, …) show
-ids and timestamps — not what was said. This viewer shows the opening prompt
-and last reply of every session so you can spot the one you want and pick up
-where you left off.
+CLI resume pickers often show little more than a session ID and timestamp. This
+viewer surfaces each session's opening prompt and latest reply so it is easier
+to find the conversation you want to continue.
 
-> **macOS only.** Uses launchd for autostart and AppleScript /
-> `open -na` to launch Ghostty, iTerm, or Terminal.app. Auto-detects
-> whichever is installed, in that order.
+> **Windows and macOS supported.** Windows prefers Windows Terminal and falls
+> back to a new CMD window when `wt.exe` is unavailable. macOS retains Ghostty,
+> iTerm, and Terminal.app auto-detection. Linux backend compatibility is covered
+> by CI, without a first-class installer or desktop terminal launcher guarantee.
+
+Long-lived support docs: [Windows guide](docs/windows.md) ·
+[Compatibility matrix](docs/compatibility.md) · [Support policy](SUPPORT.md) ·
+[Release process](RELEASE.md).
 
 ## Run
 
+### Windows
+
+From PowerShell:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\install.ps1
+```
+
+The installer registers per-user login autostart and starts the viewer. It
+prefers Task Scheduler and falls back to the current user's Startup folder.
+Runtime state and logs live under:
+
+```text
+%LOCALAPPDATA%\session-index-viewer\
+```
+
+Open:
+
+```text
+http://127.0.0.1:7333
+```
+
+Uninstall:
+
+```powershell
+.\uninstall.ps1
+```
+
+Foreground-only use is also supported:
+
+```powershell
+py server.py
+```
+
+### macOS
+
 ```bash
-./install.sh            # install as launchd agent (run at login, keep alive)
+./install.sh
 open http://localhost:7333
 ```
 
-Or run in the foreground: `python3 server.py`.
+Or run in the foreground with `python3 server.py`.
 
-Frontend (optional rebuild after UI changes):
+Frontend rebuild after UI changes is optional:
 
 ```bash
 cd frontend && npm install && npm run build
 ```
 
-`server.py` serves `frontend/dist/` when present, otherwise
-`sessions-index.html`.
+`server.py` serves `frontend/dist/` when present and falls back to
+`sessions-index.html` otherwise.
 
 ## Supported sources
 
@@ -45,68 +87,99 @@ cd frontend && npm install && npm run build
 |--------|--------------|--------|-------------|
 | Claude Code | `~/.claude/projects/*/*.jsonl` | `claude --resume <id>` | Lifetime sums from assistant `message.usage`; context ≈ peak input+cache |
 | Codex | `~/.codex/sessions/**/rollout-*.jsonl` | `codex resume <id>` | Last cumulative `token_count`; context ≈ max per-turn total |
-| Devin | `~/.local/share/devin/cli/sessions.db` | `devin -r <id>` | Aggregated from `message_nodes` |
-| Grok | `$GROK_HOME/sessions` (default `~/.grok/sessions`) | `grok --resume <id>` | **Context size only** on disk (`signals.json`); headless one-shots (`is_non_interactive`) are skipped |
+| Devin | Windows `%APPDATA%\devin\cli\sessions.db`; macOS `~/Library/Application Support/devin/cli/sessions.db`; Linux `~/.local/share/devin/cli/sessions.db` | `devin -r <id>` | Aggregated from `message_nodes`; `DEVIN_HOME` override supported |
+| Grok | `$GROK_HOME/sessions` (default `~/.grok/sessions`) | `grok --resume <id>` | Mostly context-size data from disk; non-interactive one-shots are skipped |
 | Pi | `~/.pi/agent/sessions/*/*.jsonl` | `pi --session <id>` | Sums each assistant turn's `message.usage`; context ≈ largest per-turn total |
-| Copilot CLI | `~/.copilot/session-store.db` | `copilot --resume <id>` | Sums per-turn `assistant_usage_events`; context ≈ peak input tokens |
-| opencode | `~/.local/share/opencode/opencode.db` | `opencode --session <id>` | Cumulative `session` token sums; context ≈ largest assistant message total |
+| Copilot CLI | `~/.copilot/session-store.db`; fallback `~/.copilot/session-state/<id>/events.jsonl` | `copilot --resume <id>` | DB provides richer usage; event fallback keeps transcript/model/output/tool data available |
+| opencode | `~/.local/share/opencode/opencode.db` | `opencode --session <id>` | Cumulative session token sums; `OPENCODE_DB` / `XDG_DATA_HOME` supported |
 
-Usage on the card is a short chip (`ctx · out · tools · turns`). Click it (or
-press **`u`** on the active card) for a modal with overview KPIs, token mix,
-activity counts, a **context pressure bar** (peak context vs. the model's
-window limit, colour-coded green / yellow / red), and a short note on how
-that source measures tokens.
+See [docs/compatibility.md](docs/compatibility.md) for platform-specific discovery
+rules and working-directory normalization details.
 
-**Context** is peak / window occupancy — not a full-session billing total.
-Grok often only has that size signal (labelled **size only** on the chip).
+Usage on each card is summarized as `ctx · out · tools · turns`. Click it, or
+press **`u`** on the active card, for overview metrics, token mix, activity,
+context pressure, and source-specific measurement notes.
+
+**Context** means peak/window occupancy and should not be read as a full-session
+billing total. Grok frequently exposes only a size signal.
+
+## Codex local images
+
+When a Codex reply contains a local visualization such as:
+
+```text
+file:///C:/Users/<user>/.codex/visualizations/...png
+```
+
+the viewer rewrites it to a restricted localhost media endpoint. That endpoint
+only serves PNG, JPEG, WebP, GIF, and BMP files below the current user's
+`~/.codex/visualizations` directory and rejects absolute paths, `..` traversal,
+SVG, and oversized files.
 
 ## Keyboard
 
 | Key | Action |
 |-----|--------|
 | `j` / `k` or arrows | Move active card |
-| `Enter` | Resume in Terminal |
-| `c` | Copy resume command (not ⌘C — system copy still works) |
+| `Enter` | Resume in a terminal |
+| `c` | Copy resume command |
 | `p` | Pin / unpin |
-| `u` | Open usage modal (when usage exists) |
+| `u` | Open usage modal when usage exists |
 | `⌘K` / `Ctrl+K` | Command palette |
 
 ## Pieces
 
-- `server.py` — thin entry point (`python3 server.py` / launchd).
-- `siv/` — stdlib-only backend on `127.0.0.1:7333`:
+- `server.py`: backend entry point bound to `127.0.0.1:7333`.
+- `siv/`: stdlib-only backend.
   - `GET /` serves the viewer.
-  - `GET /api/sessions?limit=1000` scans session files live, with an
-    mtime/size cache so only changed files are re-parsed.
-  - `POST /api/resume` opens a Terminal window with a validated
-    `cd <cwd> && <tool> resume <id>` command. If the recorded cwd belongs
-    to another machine, the home-dir prefix is remapped to this machine.
-  - Host badges come from the username in each session’s cwd
-    (`/Users/<name>/...` or `/home/<name>/...`).
-  - Parsers: `siv/sources/` (`claude`, `codex`, `devin`, `grok`, `pi`,
-    `copilot`, `opencode`).
-- `frontend/` — React card UI (search, source/host filters, pin, usage modal).
-- `sessions-index.html` — legacy single-file viewer (fallback if dist is missing).
-- `install.sh` — launchd plist + optional frontend build. Logs:
-  `~/Library/Logs/session-index-viewer.log`.
-- `index-sessions.sh` — legacy shell indexer; superseded by `server.py`.
+  - `GET /api/sessions?limit=1000` scans sessions with mtime/size caching.
+  - `POST /api/resume` validates source/session/cwd and opens the platform terminal.
+  - `GET /api/codex-visualization?path=...` safely proxies Codex local images.
+  - Host/cwd mapping handles macOS, Linux, native Windows `C:\Users\...`, and WSL `/mnt/c/Users/...` paths.
+  - Source adapters live under `siv/sources/`.
+- `frontend/`: React card UI.
+- `sessions-index.html`: single-file fallback when `frontend/dist` is absent.
+- `install.ps1` / `run-windows.ps1` / `uninstall.ps1`: Windows install, autostart, runtime, and removal.
+- `install.sh` / `uninstall.sh`: macOS launchd install and removal.
+- `.github/workflows/tests.yml`: backend matrix, Windows install smoke test, and frontend build.
+
+## Tests and release gate
+
+Windows:
+
+```powershell
+py -m unittest discover -s tests -v
+```
+
+CI runs the backend suite on Windows, macOS, and Ubuntu. A separate Windows job
+actually runs `install.ps1`, checks the HTTP endpoint and autostart registration,
+and then runs `uninstall.ps1`. Releases also require a successful React
+production build. See [SUPPORT.md](SUPPORT.md) and
+[docs/release-checklist.md](docs/release-checklist.md) for the maintained gate.
 
 ## Multi-machine setup
 
-If you sync session trees with Syncthing (or similar):
+If you sync session trees with Syncthing or a similar tool:
 
 | Path | Sync-friendly? |
 |------|----------------|
-| `~/.claude/projects` | Yes (per-file jsonl) |
-| `~/.codex/sessions` | Yes (per-file jsonl) |
-| `~/.grok/sessions` | Yes if you sync only session dirs and ignore `session_search.sqlite` / `*.lock` |
-| `~/.pi/agent/sessions` | Yes (per-file jsonl) |
-| Devin `sessions.db` | **No** — single SQLite DB does not merge across machines |
-| Copilot `session-store.db` | **No** — single SQLite DB does not merge across machines |
-| opencode `opencode.db` | **No** — single SQLite DB does not merge across machines |
+| `~/.claude/projects` | Yes, per-file JSONL |
+| `~/.codex/sessions` | Yes, per-file JSONL |
+| `~/.grok/sessions` | Yes when syncing session dirs while ignoring SQLite indexes and `*.lock` |
+| `~/.pi/agent/sessions` | Yes, per-file JSONL |
+| Devin `sessions.db` | **No**, a single SQLite DB cannot merge across machines |
+| Copilot `session-store.db` | **No**, a single SQLite DB cannot merge across machines |
+| opencode `opencode.db` | **No**, a single SQLite DB cannot merge across machines |
 
-No extra viewer config is required: each session is labelled by the username
-in its recorded cwd, and the host filter picks those labels up. Sessions that
-share a username across machines appear under the same host.
+The viewer derives host labels from recorded working directories. Home-relative
+paths from another machine can be remapped by suffix to the current user's home;
+existing local drive-root paths such as `D:\...` are preserved verbatim.
 
-Avoid writing the same session id on two machines at once (conflict copies).
+Avoid writing the same session ID from two machines at the same time to prevent
+conflict copies.
+
+## Maintenance
+
+The root `VERSION` file is the release version source for this fork. Release
+notes for v0.1.0 live in [docs/release-v0.1.0.md](docs/release-v0.1.0.md), and
+maintainer guidance lives in [docs/maintenance.md](docs/maintenance.md).

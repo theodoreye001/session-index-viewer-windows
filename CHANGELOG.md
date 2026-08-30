@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.1.0 - 2026-08-30
+
+### Windows support
+- **Native session discovery and resume.** Added Windows Terminal launch with a
+  CMD fallback while preserving the existing macOS Ghostty/iTerm/Terminal.app
+  behavior. Claude Code and Codex discovery plus Codex resume were verified on
+  a real Windows machine.
+- **Cross-platform cwd handling.** Host labels and resume cwd mapping now accept
+  native Windows paths, forward-slash Windows paths, macOS/Linux homes, and WSL
+  `/mnt/<drive>/Users/...` paths.
+- **Windows install/autostart.** Added `install.ps1`, `run-windows.ps1`, and
+  `uninstall.ps1`. The installer prefers a per-user Scheduled Task, falls back
+  to the Startup folder, keeps runtime state/logs in LocalAppData, and verifies
+  the localhost service after start.
+
+### Local media
+- **Codex visualization proxy.** Local `file:///.../.codex/visualizations/...`
+  image references are rewritten to a restricted localhost endpoint. The
+  endpoint allows common raster image formats below the visualization root and
+  rejects traversal, absolute paths, SVG, missing files, and oversized files.
+
+### Sources
+- **Windows-aware Devin path.** Devin for Terminal now resolves to
+  `%APPDATA%\devin\cli` on Windows, Application Support on macOS, and the XDG
+  data path on Linux. `DEVIN_HOME` is supported as an override.
+- **Copilot durable-event fallback.** `session-store.db` remains the preferred
+  fast path, with `~/.copilot/session-state/<id>/events.jsonl` used when the DB
+  is missing, empty, or incompatible.
+- **OpenCode overrides.** The viewer now honors `OPENCODE_DB` and
+  `XDG_DATA_HOME` while retaining the default `~/.local/share/opencode` store.
+
+### Validation
+- **Cross-platform CI.** Added backend tests on Windows, macOS, and Ubuntu,
+  frontend build verification, PowerShell parser checks, and a Windows smoke
+  job that performs an actual install, HTTP health check, autostart validation,
+  and uninstall.
+- **Formal support policy.** Added versioning, release notes, a permanent
+  Windows guide, a compatibility matrix, a support policy, and a repeatable
+  release checklist for the maintained fork.
+
 ## 2026-08-17
 
 ### Sources

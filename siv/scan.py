@@ -6,6 +6,7 @@ import os
 from . import cache
 from .config import CLAUDE_GLOB, CODEX_GLOB, PI_GLOB
 from .host import host_for
+from .local_media import rewrite_codex_visualization_urls
 from .resume import resume_command
 from .sources import claude, codex, copilot, devin, grok, opencode, pi
 from .sources.jsonl_files import cached_entry
@@ -90,7 +91,7 @@ def scan_sessions(limit):
             "title": e["title"],
             "first_user": e["first_user"],
             "last_user": e["last_user"],
-            "last_assistant": e["last_assistant"],
+            "last_assistant": rewrite_codex_visualization_urls(e["last_assistant"]),
             "resume_command": resume_command(e["source"], e["session_id"], e["cwd"]),
             "usage": e.get("usage"),
         }

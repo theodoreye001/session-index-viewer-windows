@@ -1,33 +1,61 @@
-"""Build resume shell commands and open them in a macOS terminal."""
+"""Build resume commands and open them in a platform terminal."""
 
 import os
 import shlex
+import shutil
 import subprocess
+import sys
 
 from .config import TERMINAL_APP
 from .host import resolve_resume_cwd
 
 
-def resume_command(source, session_id, cwd):
+def resume_args(source, session_id):
+    """Return the CLI argv used to resume one session."""
     if source == "devin":
-        base = f"devin -r {session_id}"
-    elif source == "claude":
-        base = f"claude --resume {session_id}"
-    elif source == "grok":
-        base = f"grok --resume {session_id}"
-    elif source == "pi":
-        base = f"pi --session {session_id}"
-    elif source == "copilot":
-        base = f"copilot --resume {session_id}"
-    elif source == "opencode":
-        base = f"opencode --session {session_id}"
-    else:
-        base = f"codex resume {session_id}"
+        return ["devin", "-r", session_id]
+    if source == "claude":
+        return ["claude", "--resume", session_id]
+    if source == "grok":
+        return ["grok", "--resume", session_id]
+    if source == "pi":
+        return ["pi", "--session", session_id]
+    if source == "copilot":
+        return ["copilot", "--resume", session_id]
+    if source == "opencode":
+        return ["opencode", "--session", session_id]
+    return ["codex", "resume", session_id]
+
+
+def _windows_quote(value):
+    """Quote one value for a command copied into cmd.exe."""
+    return '"' + str(value).replace('"', '""') + '"'
+
+
+def resume_command(source, session_id, cwd):
+    """Return a human-copyable resume command for the current platform."""
+    args = resume_args(source, session_id)
     resolved_cwd = resolve_resume_cwd(cwd)
-    return f"cd {shlex.quote(resolved_cwd)} && {base}" if resolved_cwd else base
+
+    if os.name == "nt":
+        base = subprocess.list2cmdline(args)
+        if resolved_cwd:
+            return f"cd /d {_windows_quote(resolved_cwd)} && {base}"
+        return base
+
+    base = shlex.join(args)
+    if resolved_cwd:
+        return f"cd {shlex.quote(resolved_cwd)} && {base}"
+    return base
 
 
 def detect_terminal():
+    """Detect the preferred terminal on the current platform."""
+    if sys.platform == "win32":
+        if TERMINAL_APP != "auto":
+            return TERMINAL_APP
+        return "WindowsTerminal" if (shutil.which("wt.exe") or shutil.which("wt")) else "cmd"
+
     if TERMINAL_APP != "auto":
         return TERMINAL_APP
     for app in ("Ghostty", "iTerm"):
@@ -36,15 +64,28 @@ def detect_terminal():
     return "Terminal"
 
 
-def open_in_terminal(command):
+def _open_windows_terminal(args, cwd):
+    terminal = detect_terminal()
+    if terminal == "WindowsTerminal":
+        wt = shutil.which("wt.exe") or shutil.which("wt") or "wt.exe"
+        subprocess.Popen(
+            [wt, "-w", "-1", "new-tab", "-d", cwd, "cmd.exe", "/k", *args]
+        )
+        return
+
+    creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+    subprocess.Popen(
+        ["cmd.exe", "/k", *args],
+        cwd=cwd,
+        creationflags=creationflags,
+    )
+
+
+def _open_macos_terminal(command):
     app = detect_terminal()
     if app == "Ghostty":
-        # On macOS the `ghostty` CLI can't launch the app directly; use
-        # `open -na` with --args -e. Ghostty's -e expects argv with no
-        # shell interpretation, so wrap in `zsh -l -c` to handle `&&`,
-        # PATH, and aliases from the user's shell config.
-        # --window-save-state=never prevents the new instance from
-        # restoring the previous window layout (tabs, splits, etc.).
+        # Ghostty's -e expects argv with no shell interpretation, so wrap
+        # in zsh to preserve shell syntax in the copyable resume command.
         subprocess.Popen(
             [
                 "open",
@@ -72,9 +113,6 @@ def open_in_terminal(command):
             "end tell"
         )
     else:
-        # Terminal.app — `do script` first creates the window with the
-        # command; the leading `activate` from earlier versions spawned an
-        # extra empty window before `do script` ran.
         script = (
             'tell application "Terminal"\n'
             f'  do script "{escaped}"\n'
@@ -82,3 +120,18 @@ def open_in_terminal(command):
             "end tell"
         )
     subprocess.Popen(["osascript", "-e", script])
+
+
+def open_in_terminal(source, session_id, cwd):
+    """Open a fresh terminal window and resume the selected session."""
+    resolved_cwd = resolve_resume_cwd(cwd)
+    args = resume_args(source, session_id)
+
+    if sys.platform == "win32":
+        _open_windows_terminal(args, resolved_cwd)
+        return
+    if sys.platform == "darwin":
+        _open_macos_terminal(resume_command(source, session_id, resolved_cwd))
+        return
+
+    raise RuntimeError(f"unsupported platform: {sys.platform}")

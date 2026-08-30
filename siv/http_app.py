@@ -1,4 +1,4 @@
-"""HTTP server: static viewer + /api/sessions + /api/resume."""
+"""HTTP server: static viewer + session/resume/local-media APIs."""
 
 import json
 import mimetypes
@@ -20,8 +20,10 @@ from .config import (
     RESUME_SOURCES,
     SESSION_ID_RE,
 )
-from .resume import open_in_terminal, resume_command
+from .local_media import resolve_codex_visualization
+from .resume import open_in_terminal
 from .scan import scan_sessions
+from .version import __version__
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -57,6 +59,22 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _serve_local_image(self, path, content_type):
+        try:
+            with open(path, "rb") as f:
+                body = f.read()
+        except OSError:
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "private, max-age=300")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
@@ -68,7 +86,9 @@ class Handler(BaseHTTPRequestHandler):
                 FAVICON_PATH, "image/svg+xml", "public, max-age=3600"
             )
         elif path.startswith("/api/"):
-            if path == "/api/sessions":
+            if path == "/api/version":
+                self._send_json({"version": __version__})
+            elif path == "/api/sessions":
                 query = parse_qs(parsed.query)
                 try:
                     limit = int(query.get("limit", [DEFAULT_LIMIT])[0])
@@ -76,6 +96,14 @@ class Handler(BaseHTTPRequestHandler):
                     limit = DEFAULT_LIMIT
                 limit = max(1, min(limit, MAX_LIMIT))
                 self._send_json(scan_sessions(limit))
+            elif path == "/api/codex-visualization":
+                relative = parse_qs(parsed.query).get("path", [""])[0]
+                try:
+                    image_path, content_type = resolve_codex_visualization(relative)
+                except (OSError, ValueError):
+                    self.send_error(404)
+                    return
+                self._serve_local_image(image_path, content_type)
             else:
                 self.send_error(404)
         else:
@@ -116,7 +144,11 @@ class Handler(BaseHTTPRequestHandler):
         if not id_re.match(session_id):
             self._send_json({"ok": False, "error": "bad session id"}, 400)
             return
-        open_in_terminal(resume_command(source, session_id, cwd))
+        try:
+            open_in_terminal(source, session_id, cwd)
+        except (OSError, RuntimeError) as exc:
+            self._send_json({"ok": False, "error": str(exc)}, 500)
+            return
         self._send_json({"ok": True})
 
     def log_message(self, fmt, *args):
@@ -127,5 +159,5 @@ def main():
     # Warm the cache so the first browser hit doesn't eat the cold scan.
     threading.Thread(target=scan_sessions, args=(DEFAULT_LIMIT,), daemon=True).start()
     server = ThreadingHTTPServer((BIND, PORT), Handler)
-    print(f"session-index-viewer listening on http://{BIND}:{PORT}")
+    print(f"session-index-viewer {__version__} listening on http://{BIND}:{PORT}")
     server.serve_forever()
