@@ -2,6 +2,8 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
+Current supported fork release: **v0.1.0**.
+
 Local web viewer for AI coding CLI sessions on this machine. Browse sessions
 from **Claude Code**, **Codex**, **Devin**, **Grok**, **Pi**, **Copilot CLI**,
 and **opencode** in one place, search across tools, inspect token/tool usage
@@ -17,8 +19,12 @@ to find the conversation you want to continue.
 
 > **Windows and macOS supported.** Windows prefers Windows Terminal and falls
 > back to a new CMD window when `wt.exe` is unavailable. macOS retains Ghostty,
-> iTerm, and Terminal.app auto-detection. Claude Code/Codex discovery and Codex
-> resume have been verified on a real Windows machine.
+> iTerm, and Terminal.app auto-detection. Linux backend compatibility is covered
+> by CI, without a first-class installer or desktop terminal launcher guarantee.
+
+Long-lived support docs: [Windows guide](docs/windows.md) ·
+[Compatibility matrix](docs/compatibility.md) · [Support policy](SUPPORT.md) ·
+[Release process](RELEASE.md).
 
 ## Run
 
@@ -87,6 +93,9 @@ cd frontend && npm install && npm run build
 | Copilot CLI | `~/.copilot/session-store.db`; fallback `~/.copilot/session-state/<id>/events.jsonl` | `copilot --resume <id>` | DB provides richer usage; event fallback keeps transcript/model/output/tool data available |
 | opencode | `~/.local/share/opencode/opencode.db` | `opencode --session <id>` | Cumulative session token sums; `OPENCODE_DB` / `XDG_DATA_HOME` supported |
 
+See [docs/compatibility.md](docs/compatibility.md) for platform-specific discovery
+rules and working-directory normalization details.
+
 Usage on each card is summarized as `ctx · out · tools · turns`. Click it, or
 press **`u`** on the active card, for overview metrics, token mix, activity,
 context pressure, and source-specific measurement notes.
@@ -134,7 +143,7 @@ SVG, and oversized files.
 - `install.sh` / `uninstall.sh`: macOS launchd install and removal.
 - `.github/workflows/tests.yml`: backend matrix, Windows install smoke test, and frontend build.
 
-## Tests
+## Tests and release gate
 
 Windows:
 
@@ -144,7 +153,9 @@ py -m unittest discover -s tests -v
 
 CI runs the backend suite on Windows, macOS, and Ubuntu. A separate Windows job
 actually runs `install.ps1`, checks the HTTP endpoint and autostart registration,
-and then runs `uninstall.ps1`.
+and then runs `uninstall.ps1`. Releases also require a successful React
+production build. See [SUPPORT.md](SUPPORT.md) and
+[docs/release-checklist.md](docs/release-checklist.md) for the maintained gate.
 
 ## Multi-machine setup
 
@@ -166,3 +177,9 @@ existing local drive-root paths such as `D:\...` are preserved verbatim.
 
 Avoid writing the same session ID from two machines at the same time to prevent
 conflict copies.
+
+## Maintenance
+
+The root `VERSION` file is the release version source for this fork. Release
+notes for v0.1.0 live in [docs/release-v0.1.0.md](docs/release-v0.1.0.md), and
+maintainer guidance lives in [docs/maintenance.md](docs/maintenance.md).
