@@ -2,6 +2,8 @@
 
 [English](README.md) · **简体中文**
 
+当前维护版本：**v0.1.0**。
+
 本机浏览 AI 编程 CLI 会话的小工具。合并 **Claude Code**、**Codex**、**Devin**、
 **Grok**、**Pi**、**Copilot CLI**、**opencode** 的 session，可搜索，可看 token /
 工具用量（有元数据时），并可一键在新的终端窗口中 resume。
@@ -15,7 +17,11 @@
 
 > **支持 Windows 和 macOS。** Windows 优先使用 Windows Terminal，找不到
 > `wt.exe` 时回退到新的 CMD 窗口；macOS 保留 Ghostty、iTerm、Terminal.app
-> 自动检测。Windows 的 Claude Code、Codex 扫描与 Codex Resume 已完成实机验证。
+> 自动检测。Linux 后端兼容性由 CI 覆盖，目前没有一等支持的安装器和桌面终端启动保证。
+
+长期维护文档：[Windows 指南](docs/windows.md) ·
+[兼容性矩阵](docs/compatibility.md) · [支持策略](SUPPORT.md) ·
+[发布流程](RELEASE.md)。
 
 ## 运行
 
@@ -78,10 +84,13 @@ cd frontend && npm install && npm run build
 | Claude Code | `~/.claude/projects/*/*.jsonl` | `claude --resume <id>` | 累加 assistant 的 `message.usage`；Context 约为单轮 input+cache 峰值 |
 | Codex | `~/.codex/sessions/**/rollout-*.jsonl` | `codex resume <id>` | 取最后一次累计 `token_count`；Context 约为各轮 total 最大 |
 | Devin | Windows `%APPDATA%\devin\cli\sessions.db`；macOS `~/Library/Application Support/devin/cli/sessions.db`；Linux `~/.local/share/devin/cli/sessions.db` | `devin -r <id>` | 从 `message_nodes` 聚合；支持 `DEVIN_HOME` 覆盖 |
-| Grok | `$GROK_HOME/sessions`（默认 `~/.grok/sessions`） | `grok --resume <id>` | 磁盘上多为 **上下文占用**（`signals.json`）；无头单次会话会跳过 |
+| Grok | `$GROK_HOME/sessions`（默认 `~/.grok/sessions`） | `grok --resume <id>` | 磁盘上多为上下文占用；无头单次会话会跳过 |
 | Pi | `~/.pi/agent/sessions/*/*.jsonl` | `pi --session <id>` | 累加每轮 assistant 的 `message.usage`；Context 约为各轮 total 最大 |
 | Copilot CLI | `~/.copilot/session-store.db`；fallback `~/.copilot/session-state/<id>/events.jsonl` | `copilot --resume <id>` | DB 可提供完整 usage；events fallback 提供会话正文、模型、输出 token 和工具调用等可用信息 |
 | opencode | `~/.local/share/opencode/opencode.db` | `opencode --session <id>` | 取 `session` 累计 token 汇总；支持 `OPENCODE_DB` / `XDG_DATA_HOME` |
+
+平台相关的路径发现规则和 cwd 归一化细节见
+[docs/compatibility.md](docs/compatibility.md)。
 
 卡片上的 usage 是短 chip（`ctx · out · tools · turns`）。点击，或在选中卡片后
 按 **`u`**，打开 modal：Overview KPI、token 分项、Activity、上下文压力条
@@ -129,7 +138,7 @@ Viewer 会将其改写为受限 localhost 图片接口。接口只允许读取�
 - `install.sh` / `uninstall.sh`：macOS launchd 安装与卸载。
 - `.github/workflows/tests.yml`：Windows、macOS、Ubuntu 后端回归，Windows 安装烟雾测试和前端 build。
 
-## 测试
+## 测试与发布门槛
 
 Windows：
 
@@ -138,7 +147,9 @@ py -m unittest discover -s tests -v
 ```
 
 CI 同时覆盖 Windows、macOS、Ubuntu，并在 Windows runner 上真实执行
-`install.ps1`、HTTP 健康检查、自启动注册验证和 `uninstall.ps1`。
+`install.ps1`、HTTP 健康检查、自启动注册验证和 `uninstall.ps1`。正式发布还要求
+React production build 成功。维护门槛见 [SUPPORT.md](SUPPORT.md) 和
+[docs/release-checklist.md](docs/release-checklist.md)。
 
 ## 多机配置
 
@@ -158,3 +169,9 @@ Viewer 会从 session 记录的 cwd 推导 host 标签。用户 Home 下的跨�
 后缀映射到当前机器 Home；本机已经存在的 `D:\...` 等路径会原样保留。
 
 避免两台机器同时写同一个 session id，以免产生 conflict 副本。
+
+## 维护
+
+根目录 `VERSION` 是此 fork 的版本号来源。v0.1.0 发布说明位于
+[docs/release-v0.1.0.md](docs/release-v0.1.0.md)，维护规则位于
+[docs/maintenance.md](docs/maintenance.md)。
