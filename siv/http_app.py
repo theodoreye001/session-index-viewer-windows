@@ -23,6 +23,7 @@ from .config import (
 from .local_media import resolve_codex_visualization
 from .resume import open_in_terminal
 from .scan import scan_sessions
+from .version import __version__
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -85,7 +86,9 @@ class Handler(BaseHTTPRequestHandler):
                 FAVICON_PATH, "image/svg+xml", "public, max-age=3600"
             )
         elif path.startswith("/api/"):
-            if path == "/api/sessions":
+            if path == "/api/version":
+                self._send_json({"version": __version__})
+            elif path == "/api/sessions":
                 query = parse_qs(parsed.query)
                 try:
                     limit = int(query.get("limit", [DEFAULT_LIMIT])[0])
@@ -156,5 +159,5 @@ def main():
     # Warm the cache so the first browser hit doesn't eat the cold scan.
     threading.Thread(target=scan_sessions, args=(DEFAULT_LIMIT,), daemon=True).start()
     server = ThreadingHTTPServer((BIND, PORT), Handler)
-    print(f"session-index-viewer listening on http://{BIND}:{PORT}")
+    print(f"session-index-viewer {__version__} listening on http://{BIND}:{PORT}")
     server.serve_forever()
