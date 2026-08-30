@@ -11,16 +11,18 @@ v0.1.0 is the first formally supported Windows release of this fork while retain
 - Windows-aware Devin data discovery with `DEVIN_HOME` override.
 - Copilot CLI `session-state/*/events.jsonl` fallback when the SQLite session index is missing or incompatible.
 - opencode path overrides through `OPENCODE_DB` and `XDG_DATA_HOME`.
+- Runtime version reporting through `GET /api/version` backed by the root `VERSION` file.
 - CI matrix covering Windows, macOS, and Ubuntu, plus frontend production build and a real Windows installation smoke test.
 
 ## Validation gate
 
 The release candidate must pass on the final release commit:
 
-- 42 Python unit tests on Windows, macOS, and Ubuntu.
+- Full Python unit suite on Windows, macOS, and Ubuntu.
 - PowerShell parser validation for `install.ps1`, `run-windows.ps1`, and `uninstall.ps1`.
 - React frontend production build.
 - Windows install smoke test that installs the viewer, receives HTTP 200 from `/api/sessions`, verifies autostart registration, and uninstalls cleanly.
+- Runtime version endpoint reports `0.1.0` from the release candidate.
 
 ## Upgrade from the development branch
 
